@@ -11,8 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from smooth_diagrams.database import queries
 from smooth_diagrams.database.engine import create_engine, create_session_factory, run_migrations
+from smooth_diagrams.model_catalog import ModelVendor
 from smooth_diagrams.providers.base import ModelProvider
 from smooth_diagrams.providers.claude import ClaudeProvider
+from smooth_diagrams.providers.gpt import GptProvider
+from smooth_diagrams.providers.routing import RoutingProvider
 from smooth_diagrams.routes import (
 	assets,
 	exports,
@@ -33,6 +36,21 @@ from smooth_diagrams.storage.file_store import LocalFileStore
 logger = logging.getLogger(__name__)
 
 
+def build_provider(settings: Settings) -> ModelProvider:
+	"""Return the provider that runs each model through its vendor's own program."""
+	data_directory = backend_directory / "data"
+	return RoutingProvider(
+		{
+			ModelVendor.ANTHROPIC: ClaudeProvider(data_directory / "claude_workspace"),
+			ModelVendor.OPENAI: GptProvider(
+				[settings.codex_program],
+				data_directory / "codex_workspace",
+				settings.gpt_reasoning_effort,
+			),
+		}
+	)
+
+
 def create_app(
 	settings: Settings | None = None,
 	provider: ModelProvider | None = None,
@@ -42,7 +60,7 @@ def create_app(
 
 	Args:
 		settings: Settings to use instead of the ones read from the environment.
-		provider: Model provider to use instead of Claude, such as a scripted one in tests.
+		provider: Model provider to use for every model, such as a scripted one in tests.
 		embedder: Image embedder to use instead of CLIP, such as a simple one in tests.
 
 	Returns:
@@ -59,9 +77,7 @@ def create_app(
 		app.state.settings = app_settings
 		app.state.session_factory = create_session_factory(engine)
 		app.state.file_store = LocalFileStore(app_settings.assets_directory)
-		app.state.provider = provider or ClaudeProvider(
-			backend_directory / "data" / "claude_workspace"
-		)
+		app.state.provider = provider or build_provider(app_settings)
 
 		# The embedding model itself is loaded the first time the library is sorted by similarity.
 		app.state.embedder = embedder or ClipEmbedder(
@@ -77,6 +93,10 @@ def create_app(
 		if os.environ.get("ANTHROPIC_API_KEY"):
 			logger.warning(
 				"ANTHROPIC_API_KEY is set, so Claude will bill the API instead of the plan login."
+			)
+		if os.environ.get("OPENAI_API_KEY"):
+			logger.warning(
+				"OPENAI_API_KEY is set; if Codex signs in with it, GPT bills the API, not the plan."
 			)
 
 		yield

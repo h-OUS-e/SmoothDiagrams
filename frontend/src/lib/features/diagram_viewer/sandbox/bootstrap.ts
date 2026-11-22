@@ -9,7 +9,7 @@ import type {
 	RenderFailureStage,
 	SandboxToAppMessage
 } from './sandbox_messages.ts';
-import { serialize_svg } from './serialize_svg.ts';
+import { base_style_attribute, serialize_svg } from './serialize_svg.ts';
 
 let active_render_id = 0;
 let active_render_failed = false;
@@ -56,6 +56,14 @@ function wait_for_next_task(): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+// Remove the styles of the diagram shown before, which would otherwise stand in for the new ones.
+function remove_diagram_styles() {
+	// Svelte skips a stylesheet whose id already exists, and every diagram compiles to the same id.
+	for (const style of document.head.querySelectorAll(`style:not([${base_style_attribute}])`)) {
+		style.remove();
+	}
+}
+
 // Return the markup of the mounted diagram, or null when nothing is mounted.
 function capture_svg_markup(): string | null {
 	const svg = document.body.querySelector('svg');
@@ -92,6 +100,7 @@ async function render_diagram(message: Extract<AppToSandboxMessage, { type: 'ren
 
 	// Mount the diagram and run its effects, so render errors surface before the check below.
 	try {
+		remove_diagram_styles();
 		host.show_diagram(diagram_module.default as Component<DiagramProps>, build_diagram_props());
 		flushSync();
 	} catch (error) {

@@ -33,8 +33,14 @@ export const project: ProjectDetail = {
 export const model_catalog: ModelCatalog = {
 	default_model: 'claude-opus-5-5',
 	models: [
-		{ id: 'claude-opus-5-5', label: 'Claude Opus 5.5', note: null },
-		{ id: 'claude-fable-5-2', label: 'Claude Fable 5.2', note: 'Can be billed to usage credits.' }
+		{ id: 'claude-opus-5-5', label: 'Claude Opus 5.5', vendor: 'anthropic', note: null },
+		{
+			id: 'claude-fable-5-2',
+			label: 'Claude Fable 5.2',
+			vendor: 'anthropic',
+			note: 'Can be billed to usage credits.'
+		},
+		{ id: 'gpt-6-astra', label: 'GPT-6-Astra', vendor: 'openai', note: null }
 	]
 };
 

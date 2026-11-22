@@ -59,6 +59,12 @@ def test_model_catalog_names_versions_and_a_default(client: TestClient) -> None:
 	assert "usage credits" in notes["claude-fable-5-2"]
 	assert notes["claude-opus-5-5"] is None
 
+	# Every model names its vendor, which decides the program it runs through.
+	vendors = {model["id"]: model["vendor"] for model in catalog["models"]}
+	assert vendors["claude-opus-5-5"] == "anthropic"
+	assert vendors["gpt-6-astra"] == "openai"
+	assert set(vendors.values()) == {"anthropic", "openai"}
+
 
 def test_other_origins_cannot_change_state(client: TestClient) -> None:
 	headers = {"origin": "https://example.com"}

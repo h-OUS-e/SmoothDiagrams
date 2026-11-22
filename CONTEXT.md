@@ -140,6 +140,37 @@ fits a personal, single-user app. Anthropic's policy bars offering Claude plan
 login to other users, so adding accounts would mean moving to API keys.
 Checked against vendor docs on 2026-11-21.
 
+### GPT runs through Codex with everything of Codex switched off
+
+Codex is a coding agent, and a diagram model must not be one. The server starts
+`codex app-server` with its shell, web search, plugins, skills, project
+instructions, and notes about the computer switched off, replaces its coding
+instructions with the diagram prompt, switches off the director's own tool servers
+for the thread, and hands it the two source tools as its only tools. Three things
+no setting removes, checked against Codex 0.153.4 on 2026-11-22:
+
+- The model calls tools by writing a short script for Codex's code runner, which
+  has no files, no network, and nothing to call but those tools.
+- A file patch tool stays listed. The thread is read-only and never asks for
+  approval, so every patch is rejected.
+- Tools that start agents of Codex's own stay reachable. The server stops a turn
+  the moment one starts, and reports the turn as failed.
+
+These should be checked again when Codex is updated. `codex debug prompt-input`
+shows what the model is told, without calling it.
+
+### A Step Reasoning from GPT arrives whole
+
+Claude streams a tool call as it writes it, so its Step Reasoning appears word by
+word. Codex reports a tool call only once it is complete, so a GPT Step Reasoning
+appears at once, when the Step is proposed.
+
+### GPT's reasoning effort is a server setting
+
+Codex has its own reasoning effort setting, which a director tunes for coding. The
+server ignores it and sends its own (medium unless changed), so drawing speed does
+not change when the director changes how Codex codes.
+
 ### Step source is compiled in the browser
 
 Each Step's Svelte source is compiled in a web worker and run in a sandboxed

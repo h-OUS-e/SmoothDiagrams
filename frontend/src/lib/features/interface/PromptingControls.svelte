@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ModelOption, PromptControlValue } from '#lib/api/api_types.ts';
+	import type { ModelOption, ModelVendor, PromptControlValue } from '#lib/api/api_types.ts';
 	import SelectField from '#lib/components/ui/SelectField.svelte';
 	import Toggle from '#lib/components/ui/Toggle.svelte';
 	import PromptControlField from './PromptControlField.svelte';
@@ -13,6 +13,12 @@
 	};
 
 	let { project_interface, model_options, is_generating }: Props = $props();
+
+	// Heading the models of each vendor are listed under: the login their calls run on.
+	const vendor_headings: Record<ModelVendor, string> = {
+		anthropic: 'Claude plan login',
+		openai: 'ChatGPT plan login'
+	};
 
 	let settings = $derived(project_interface.settings);
 	let model_note = $derived(
@@ -33,7 +39,11 @@
 	<SelectField
 		label="Model"
 		value={settings.model}
-		options={model_options.map((option) => ({ value: option.id, label: option.label }))}
+		options={model_options.map((option) => ({
+			value: option.id,
+			label: option.label,
+			group: vendor_headings[option.vendor]
+		}))}
 		on_change={(model: string) => project_interface.change({ model })}
 	/>
 	{#if model_note}

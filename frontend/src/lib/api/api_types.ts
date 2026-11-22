@@ -6,10 +6,14 @@ export type NodeKind = 'generated' | 'uploaded';
 
 export type NodeStatus = 'generating' | 'finished' | 'stopped' | 'failed';
 
+export type ModelVendor = 'anthropic' | 'openai';
+
 export type ModelOption = {
 	// Exact model id, which the label names with its version.
 	id: string;
 	label: string;
+	// Whose model it is, which decides the program a generation runs through.
+	vendor: ModelVendor;
 	// Something the director should know before choosing the model.
 	note: string | null;
 };

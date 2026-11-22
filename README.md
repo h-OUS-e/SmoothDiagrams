@@ -5,7 +5,7 @@ Creating SVG diagrams with ease by exploiting smooth interactions with visual pr
 
 The app is two processes: a local server that stores the work and calls the models, and the frontend.
 
-Start the local server from `backend/`. It needs the Claude Code login of this machine, and creates its SQLite database in `backend/data/` on first start. `uv run` uses the project's own environment in `backend/.venv`, whichever conda environment is active.
+Start the local server from `backend/`. It needs the Claude Code login of this machine for the Claude models, and the Codex login (`codex login`) for the GPT models; either one alone is enough to draw with its models. It creates its SQLite database in `backend/data/` on first start. `uv run` uses the project's own environment in `backend/.venv`, whichever conda environment is active.
 
 ```bash
 uv run uvicorn smooth_diagrams.main:app --port 8000

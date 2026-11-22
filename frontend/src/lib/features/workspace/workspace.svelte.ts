@@ -279,7 +279,9 @@ export class Workspace {
 			proposed: null,
 			failure_message: null
 		};
-		this.#socket = open_generation_socket(
+
+		// Ignore this socket once another is current, because a socket closes after its generation.
+		const socket = open_generation_socket(
 			{
 				type: 'start',
 				piece_id: this.piece.id,
@@ -287,9 +289,14 @@ export class Workspace {
 				parent_node_id,
 				prompt
 			},
-			(event) => this.#handle_generation_event(event),
-			(has_ended) => this.#handle_socket_closed(has_ended)
+			(event) => {
+				if (this.#socket === socket) this.#handle_generation_event(event);
+			},
+			(has_ended) => {
+				if (this.#socket === socket) this.#handle_socket_closed(has_ended);
+			}
 		);
+		this.#socket = socket;
 	}
 
 	// Report whether the proposed step rendered, so the server can save it or ask for a repair.
