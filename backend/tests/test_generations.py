@@ -81,7 +81,7 @@ def test_steps_are_saved_as_they_render(
 		await source_tools.write_source("Circle first", source_a)
 		await source_tools.edit_source("Then a rect", [SourceEdit("</svg>", "<rect /></svg>")])
 
-	scripted_provider._turns.append(turn)
+	scripted_provider.turns.append(turn)
 	piece_id = create_piece(client)
 
 	with client.websocket_connect("/generations") as websocket:
@@ -116,7 +116,7 @@ def test_failed_step_is_repaired(client: TestClient, scripted_provider: Scripted
 		replies.append(await source_tools.write_source("Broken", "<svg><circle></svg>"))
 		replies.append(await source_tools.write_source("Fixed", source_a))
 
-	scripted_provider._turns.append(turn)
+	scripted_provider.turns.append(turn)
 
 	with client.websocket_connect("/generations") as websocket:
 		director = Director(websocket, create_piece(client))
@@ -140,7 +140,7 @@ def test_edit_that_matches_nothing_fails_without_a_proposal(
 		await source_tools.write_source("Circle first", source_a)
 		replies.append(await source_tools.edit_source("Miss", [SourceEdit("<ellipse />", "")]))
 
-	scripted_provider._turns.append(turn)
+	scripted_provider.turns.append(turn)
 
 	with client.websocket_connect("/generations") as websocket:
 		director = Director(websocket, create_piece(client))
@@ -157,7 +157,7 @@ def test_generation_fails_after_too_many_failed_attempts(
 		for attempt in range(5):
 			await source_tools.edit_source(f"Miss {attempt}", [SourceEdit("<ellipse />", "")])
 
-	scripted_provider._turns.append(turn)
+	scripted_provider.turns.append(turn)
 
 	with client.websocket_connect("/generations") as websocket:
 		director = Director(websocket, create_piece(client))
@@ -187,7 +187,7 @@ def test_rejected_step_is_removed_and_the_model_told(
 	async def second_turn(source_tools: SourceTools) -> None:
 		await source_tools.write_source("A path instead", source_c)
 
-	scripted_provider._turns.extend([first_turn, second_turn])
+	scripted_provider.turns.extend([first_turn, second_turn])
 
 	with client.websocket_connect("/generations") as websocket:
 		director = Director(websocket, create_piece(client))
@@ -227,7 +227,7 @@ def test_pause_holds_the_work_until_resume(
 	async def second_turn(source_tools: SourceTools) -> None:
 		await source_tools.write_source("Then a rect", source_b)
 
-	scripted_provider._turns.extend([first_turn, second_turn])
+	scripted_provider.turns.extend([first_turn, second_turn])
 
 	with client.websocket_connect("/generations") as websocket:
 		director = Director(websocket, create_piece(client))
@@ -259,7 +259,7 @@ def test_redirect_interrupts_and_sends_the_new_direction(
 	async def second_turn(source_tools: SourceTools) -> None:
 		await source_tools.write_source("A path, as asked", source_c)
 
-	scripted_provider._turns.extend([first_turn, second_turn])
+	scripted_provider.turns.extend([first_turn, second_turn])
 
 	with client.websocket_connect("/generations") as websocket:
 		director = Director(websocket, create_piece(client))
@@ -279,7 +279,7 @@ def test_stop_keeps_the_steps_saved_so_far(
 		await source_tools.write_source("Circle first", source_a)
 		await wait_for_interrupt(source_tools)
 
-	scripted_provider._turns.append(turn)
+	scripted_provider.turns.append(turn)
 
 	with client.websocket_connect("/generations") as websocket:
 		director = Director(websocket, create_piece(client))
@@ -303,7 +303,7 @@ def test_node_can_continue_from_a_step_of_another(
 	async def fork_turn(source_tools: SourceTools) -> None:
 		await source_tools.edit_source("A path instead", [SourceEdit("</svg>", "<path /></svg>")])
 
-	scripted_provider._turns.extend([first_turn, fork_turn])
+	scripted_provider.turns.extend([first_turn, fork_turn])
 	piece_id = create_piece(client)
 
 	with client.websocket_connect("/generations") as websocket:
@@ -327,20 +327,6 @@ def test_node_can_continue_from_a_step_of_another(
 	assert [step["source"] for step in parent["steps"]] == [source_a, source_b]
 
 
-def test_step_by_step_toggle_chooses_the_system_prompt(
-	client: TestClient, scripted_provider: ScriptedProvider
-) -> None:
-	piece_id = create_piece(client)
-
-	for is_step_by_step in (True, False):
-		with client.websocket_connect("/generations") as websocket:
-			director = Director(websocket, piece_id, is_step_by_step=is_step_by_step)
-			director.receive_until("generation_ended")
-
-	assert "Working in steps" in scripted_provider.system_prompts[0]
-	assert "Working in one pass" in scripted_provider.system_prompts[1]
-
-
 def test_generation_stops_when_the_frontend_leaves(
 	client: TestClient, scripted_provider: ScriptedProvider
 ) -> None:
@@ -348,7 +334,7 @@ def test_generation_stops_when_the_frontend_leaves(
 		await source_tools.write_source("Circle first", source_a)
 		await wait_for_interrupt(source_tools)
 
-	scripted_provider._turns.append(turn)
+	scripted_provider.turns.append(turn)
 
 	with client.websocket_connect("/generations") as websocket:
 		director = Director(websocket, create_piece(client))
@@ -361,18 +347,6 @@ def test_generation_stops_when_the_frontend_leaves(
 			break
 		time.sleep(0.05)
 	assert client.get(f"/nodes/{node_id}").json()["status"] == "stopped"
-
-
-def test_unknown_model_is_refused_before_a_node_is_created(client: TestClient) -> None:
-	piece_id = create_piece(client)
-
-	with client.websocket_connect("/generations") as websocket:
-		director = Director(websocket, piece_id, model="some-other-model")
-		ended = director.receive_until("generation_ended")
-
-	assert ended["status"] == "failed"
-	assert "some-other-model" in ended["message"]
-	assert client.get(f"/pieces/{piece_id}").json()["nodes"] == []
 
 
 def test_first_message_must_be_a_start_command(client: TestClient) -> None:

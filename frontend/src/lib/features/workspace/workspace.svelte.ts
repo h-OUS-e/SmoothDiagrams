@@ -2,8 +2,7 @@
 
 import * as api from '#lib/api/api_client.ts';
 import type {
-	ModelCatalog,
-	ModelOption,
+	ExportInput,
 	NodeDetail,
 	NodeSummary,
 	PieceDetail,
@@ -56,9 +55,12 @@ function summarize_node(node: NodeDetail): NodeSummary {
 		model: node.model,
 		is_step_by_step: node.is_step_by_step,
 		failure_message: node.failure_message,
+		image_asset_id: node.image_asset_id,
+		interface_version_id: node.interface_version_id,
 		created_at: node.created_at,
 		step_count: accepted_steps.length,
-		render_svg: accepted_steps.at(-1)?.render_svg ?? null
+		render_svg: accepted_steps.at(-1)?.render_svg ?? null,
+		export_count: node.exports.length
 	};
 }
 
@@ -75,12 +77,15 @@ export class Workspace {
 	parameter_values: ParameterValues = $state({});
 	time = $state(0);
 
+	// Source of the diagram the viewer shows, which stays the last good one when a source fails.
+	rendered_source: string | null = $state(null);
+
 	generation: GenerationState | null = $state(null);
-	is_step_by_step = $state(true);
-	model_options: ModelOption[] = $state.raw([]);
-	// Id of the model the next generation uses.
-	model = $state('');
 	error_message: string | null = $state(null);
+
+	is_offering_taste_reasons = $state(false);
+	// Ids of the nodes whose taste reason question the director skipped in this visit.
+	skipped_taste_reason_node_ids: string[] = $state([]);
 
 	accepted_steps: StepDetail[] = $derived(
 		this.node?.steps.filter((step) => !step.is_rejected) ?? []
@@ -91,27 +96,43 @@ export class Workspace {
 			null
 	);
 
+	is_uploaded_node = $derived(this.node?.kind === 'uploaded');
+
 	// Source on screen: the selected step, or the step a node without steps starts from.
 	shown_source: string | null = $derived(
-		this.selected_step?.source ?? this.node?.parent_step?.source ?? null
+		this.is_uploaded_node
+			? null
+			: (this.selected_step?.source ?? this.node?.parent_step?.source ?? null)
 	);
 	is_generating = $derived(this.generation !== null);
-	selected_model: ModelOption | null = $derived(
-		this.model_options.find((option) => option.id === this.model) ?? null
+
+	// Whether the viewer shows the selected step, so that what is exported is what is on screen.
+	can_export = $derived(
+		this.selected_step !== null && this.rendered_source === this.selected_step.source
 	);
+
+	// Whether to ask why the director continued from the selected node's parent.
+	asks_taste_reason = $derived.by(() => {
+		const node = this.node;
+		if (!node || node.parent_node_id === null || node.taste_reason !== null) return false;
+		if (this.skipped_taste_reason_node_ids.includes(node.id)) return false;
+		return this.is_offering_taste_reasons || (node.taste_reason_candidates?.length ?? 0) > 0;
+	});
 
 	#socket: GenerationSocket | null = null;
 	#save_timer: ReturnType<typeof setTimeout> | null = null;
+	#offers_taste_reasons = false;
+	#on_generation_ended: () => void;
 
 	constructor(
 		project: ProjectDetail,
 		piece: PieceDetail | null,
 		node: NodeDetail | null,
-		model_catalog: ModelCatalog
+		// Called whenever a generation ends, however it ends.
+		on_generation_ended: () => void
 	) {
 		this.project = project;
-		this.model_options = model_catalog.models;
-		this.model = model_catalog.default_model;
+		this.#on_generation_ended = on_generation_ended;
 		this.piece = piece;
 		this.#show_node(node);
 	}
@@ -166,6 +187,7 @@ export class Workspace {
 	handle_viewer_outcome = (outcome: ViewerOutcome) => {
 		if (!outcome.ok) return;
 
+		this.rendered_source = outcome.source;
 		this.parameters = outcome.parameters;
 		this.animation = outcome.animation;
 		this.time = outcome.animation ? Math.min(this.time, outcome.animation.duration) : 0;
@@ -185,13 +207,70 @@ export class Workspace {
 		}, save_delay);
 	}
 
+	// Remember an export of the selected node and mark the node as exported in the tree.
+	async record_export(export_input: ExportInput) {
+		const node = this.node;
+		if (!node) return;
+
+		await this.#run(async () => {
+			node.exports.push(await api.add_export(node.id, export_input));
+			this.#refresh_node_summary();
+		});
+	}
+
 	/* ------------------------------------------------------------------ */
 	/* Generation                                                          */
 	/* ------------------------------------------------------------------ */
 
-	// Start a node from the director's prompt, continuing from the step on screen if there is one.
-	start_generation(prompt: string) {
+	// Add an image the director edited outside the app as a node under the step on screen.
+	async upload_node(file: File) {
+		const piece = this.piece;
+		if (!piece || this.is_generating) return;
+
+		await this.#run(async () => {
+			const parent_step_id = this.selected_step?.id ?? this.node?.parent_step_id ?? null;
+			const node = await api.add_uploaded_node(piece.id, file, parent_step_id);
+			piece.nodes.push(summarize_node(node));
+			this.#show_node(node);
+		});
+	}
+
+	// Store the reason the director picked or wrote for continuing from the parent node.
+	async pick_taste_reason(taste_reason: string) {
+		const node = this.node;
+		if (!node) return;
+
+		node.taste_reason = taste_reason;
+		await this.#run(async () => {
+			await api.set_taste_reason(node.id, taste_reason);
+		});
+	}
+
+	// Stop asking for the selected node's taste reason; its candidates stay stored.
+	skip_taste_reason() {
+		if (this.node) this.skipped_taste_reason_node_ids.push(this.node.id);
+	}
+
+	/**
+	 * Start a node from the director's prompt, continuing from the step on screen if there is one.
+	 *
+	 * The server reads everything else from the project's interface, so its pending changes
+	 * must be stored before this is called.
+	 *
+	 * Args:
+	 *   prompt: What the director asks for.
+	 *   offers_taste_reasons: Whether to ask the taste reason agent about the new node.
+	 */
+	start_generation(prompt: string, offers_taste_reasons: boolean) {
 		if (!this.piece || this.generation) return;
+		this.#offers_taste_reasons = offers_taste_reasons;
+
+		// Continue from a step, or from an uploaded node, which has no step to name.
+		const parent_step_id = this.is_uploaded_node
+			? null
+			: (this.selected_step?.id ?? this.node?.parent_step_id ?? null);
+		const uploaded_parent_id = this.is_uploaded_node ? this.node?.id : this.node?.parent_node_id;
+		const parent_node_id = parent_step_id === null ? (uploaded_parent_id ?? null) : null;
 
 		this.error_message = null;
 		this.generation = {
@@ -204,10 +283,9 @@ export class Workspace {
 			{
 				type: 'start',
 				piece_id: this.piece.id,
-				parent_step_id: this.selected_step?.id ?? this.node?.parent_step_id ?? null,
-				prompt,
-				is_step_by_step: this.is_step_by_step,
-				model: this.model
+				parent_step_id,
+				parent_node_id,
+				prompt
 			},
 			(event) => this.#handle_generation_event(event),
 			(has_ended) => this.#handle_socket_closed(has_ended)
@@ -263,6 +341,9 @@ export class Workspace {
 			case 'node_created':
 				this.piece?.nodes.push(summarize_node(event.node));
 				this.#show_node(event.node);
+				if (this.#offers_taste_reasons && event.node.parent_node_id !== null) {
+					void this.#offer_taste_reasons(event.node.id);
+				}
 				break;
 			case 'reasoning_progress':
 				generation.reasoning_text = event.text;
@@ -308,8 +389,19 @@ export class Workspace {
 				}
 				this.#refresh_node_summary();
 				this.generation = null;
+				this.#on_generation_ended();
 				break;
 		}
+	}
+
+	// Ask the taste reason agent about a new node and attach its candidates to the node.
+	async #offer_taste_reasons(node_id: string) {
+		this.is_offering_taste_reasons = true;
+		await this.#run(async () => {
+			const candidates = await api.offer_taste_reasons(node_id);
+			if (this.node?.id === node_id) this.node.taste_reason_candidates = candidates;
+		});
+		this.is_offering_taste_reasons = false;
 	}
 
 	// Recover when the socket closes before the generation reported its end.
@@ -318,6 +410,7 @@ export class Workspace {
 		if (has_ended || !this.generation) return;
 
 		this.generation = null;
+		this.#on_generation_ended();
 		this.error_message =
 			'The connection to the local server was lost. Steps saved so far are kept.';
 
@@ -343,6 +436,7 @@ export class Workspace {
 		this.parameters = [];
 		this.animation = null;
 		this.time = 0;
+		this.rendered_source = null;
 	}
 
 	// Bring the selected node's entry in the piece's tree in line with its detail.

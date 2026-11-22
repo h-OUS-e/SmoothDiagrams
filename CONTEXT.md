@@ -45,7 +45,8 @@ _Avoid_: image, picture
 
 ### Prior
 
-A reference the user selects to guide generation, such as a past creation.
+A reference the user selects to guide generation in one Project: an item picked
+from the Library, or a text of its own such as a brief.
 _Avoid_: reference, example
 
 ### Prior Note
@@ -55,29 +56,44 @@ _Avoid_: prompt tag, caption
 
 ### Taste Prior
 
-A Prior kept outside any Project that guides taste across Projects. It can be
-switched on or off.
+A Prior kept outside any Project that guides taste across Projects. It is taste
+notes, a skill document, or an image, and it can be switched on or off.
 _Avoid_: permanent prior
 
 ### Library
 
 A collection shared across Projects that holds reference images and Nodes the
 user has sent to it. It is where Priors are picked from, not a view of the current
-Project's Pieces.
+Project's Pieces. It is ordered by date, by name, or by how much each item looks
+like one the director picks.
 _Avoid_: gallery, assets
 
 ### Export
 
-Downloading a Node as a Svelte component, a static SVG, a PNG, or a JPEG. Each
-Export is remembered on its Node.
+Downloading a Step of a Node as a Svelte component, a static SVG, a PNG, or a JPEG.
+Each Export is remembered on its Node with the Step, the parameter values, the
+animation time, and the size it was made with.
 _Avoid_: publish, download
 
 ### Interface
 
-A Project's saved setup for directing: its permanent controls, its prompt
-templates, and which taste Priors are on by default. Every change saves a new
-immutable version, and a new Project can start from a copy of any version.
+A Project's saved setup for directing: the model, the way of working, its Prompt
+Controls, its prompt templates, and which Taste Priors it switches off. It is kept
+as versions, and a new Project can start from a copy of any version of any Project.
 _Avoid_: layout, preset
+
+### Interface Version
+
+One saved state of an Interface. It is frozen once a Node was made with it or
+another version was copied from it, and each Node records the version that made it.
+_Avoid_: snapshot, revision
+
+### Prompt Control
+
+A control an Interface defines for the director, such as a ratio choice or a
+novelty slider. Its value reaches the model as an instruction, not as a value in
+the Diagram's source.
+_Avoid_: permanent parameter, setting
 
 ### Step
 
@@ -159,6 +175,79 @@ The server holds a Step the model proposes until the frontend reports that it
 compiled and rendered, and sends the failure back to the model otherwise. This is
 why a generation needs the app open in a browser, and why the page keeps a second,
 hidden viewer: checking a Step must not disturb the diagram on screen.
+
+### A Taste Reason lives on the Node that continues, not on the Node that was picked
+
+A Taste Reason says why the director continued from a parent Node, but it is stored
+on the child, because one parent can be continued several times for different
+reasons. A generation is told the Taste Reasons of every Node on the path from the
+root to the Node it continues from, so a reason reaches later generations on that
+branch and no others. Candidates the director never picked are kept but not told.
+
+### What a Prior shows the model depends on what it is
+
+An image Prior is attached as an image. A Node Prior is given as text: the requests
+that led to it, the Step Reasonings of its Steps, and its final source, because a
+model that writes code learns more from the code than from a picture of its render.
+An Uploaded Node used as a Prior counts as an image.
+
+### Continuing from an Uploaded Node starts from the source it was an edit of
+
+An Uploaded Node has no source, so a generation that continues from it starts from
+the source of the Step the upload was an edit of, and is shown the uploaded image
+as the state to bring that source in line with.
+
+### An Interface Version freezes when it is used, not on every change
+
+The first plan was a new immutable version for every change. A slider dragged from
+30 to 80 would then leave dozens of versions that never produced anything. Instead
+the current version changes in place until a Node is made with it or a Project is
+started from it; from then on it never changes, and the next change continues in a
+new version. Every setup that produced work is kept, and nothing else.
+
+### The server reads generation settings from the Interface, not from the request
+
+A generation is started with only the piece, the parent, and the prompt. The model,
+the way of working, the Prompt Controls, and the Taste Priors come from the
+Project's current Interface Version, which is why the frontend stores pending
+Interface changes before it starts a generation, and refuses to start if that fails.
+
+### The diagram rules are not part of the Interface
+
+The director can rewrite the direction and the two ways of working per Project.
+The rules of the source format stay in a fixed file, because the viewer checks
+those rules and a reworded copy would produce Steps that fail to render.
+
+### An Interface lists the Taste Priors it switches off
+
+Taste Priors apply to every Project unless a Project's Interface switches them
+off, so a Taste Prior added later is on everywhere without touching old versions.
+
+### Export files are made in the browser, and only their settings are kept
+
+The browser already holds the diagram as the director sees it, so an SVG is that
+markup, a PNG or JPEG is that markup drawn on a canvas, and a Svelte component is
+the Step's source with the director's values written in as the defaults of its
+props. The server stores what the file was made from, not the file, so an Export
+can be made again without the app keeping copies of files the director already has.
+
+### Visual similarity runs CLIP through ONNX Runtime, not torch
+
+The Library is sorted with the image half of CLIP ViT-B/32. ONNX Runtime adds about
+40 MB of packages where torch would add gigabytes. The owner chose the quantized
+model file (89 MB) over the full one (352 MB) on 2026-11-22; the file is one
+setting. It is downloaded from Hugging Face at a pinned revision the first time the
+Library is sorted by similarity, and never before.
+
+### A Node in the Library is compared by a picture drawn on the server
+
+An embedding needs pixels, and a Node only has the SVG markup of its renders. The
+server draws that markup itself with resvg instead of asking the browser for a
+picture, so any item can be embedded at any time without the app being open on it.
+Each embedding is kept on its Library item with the model and the asset or Step it
+came from, and is computed again only when one of those changes. Images are fitted
+whole onto a white square, because the usual center crop would cut the sides off a
+wide diagram.
 
 ### Animation is driven by a time prop
 

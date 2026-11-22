@@ -75,6 +75,21 @@ def test_frontend_can_change_state_from_any_local_port(client: TestClient) -> No
 		assert response.headers["access-control-allow-origin"] == origin
 
 
+def test_browser_may_use_every_method_the_frontend_sends(client: TestClient) -> None:
+	# A browser asks first before a request that is not a plain form post.
+	for method in ("POST", "PUT", "PATCH", "DELETE"):
+		response = client.options(
+			"/projects",
+			headers={
+				"origin": "http://localhost:5173",
+				"access-control-request-method": method,
+				"access-control-request-headers": "content-type",
+			},
+		)
+		assert response.status_code == 200, method
+		assert method in response.headers["access-control-allow-methods"]
+
+
 def test_lookalike_origins_are_refused(client: TestClient) -> None:
 	for origin in ("http://localhost.example.com:5173", "https://example.com/localhost:5173"):
 		response = client.post("/projects", json={"name": "Postcards"}, headers={"origin": origin})

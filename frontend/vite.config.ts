@@ -5,6 +5,9 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+	// Prepare the compiler when the dev server starts; discovering it during the first
+	// generation would reload the page and cut that generation off.
+	optimizeDeps: { include: ['svelte/compiler'] },
 	plugins: [
 		enhancedImages(),
 		tailwindcss(),

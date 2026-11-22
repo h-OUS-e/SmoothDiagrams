@@ -86,6 +86,7 @@ async def run_generation(websocket: WebSocket) -> None:
 		start=start,
 		provider=websocket.app.state.provider,
 		session_factory=websocket.app.state.session_factory,
+		file_store=websocket.app.state.file_store,
 		settings=websocket.app.state.settings,
 		emit=emit,
 	)

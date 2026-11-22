@@ -1,35 +1,41 @@
 """A model provider that plays back scripted turns, so tests need no real model."""
 
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 
-from smooth_diagrams.providers.base import ModelSession, ProviderEvent, SourceTools, TurnEnded
+from smooth_diagrams.providers.base import (
+	ModelSession,
+	PromptImage,
+	ProviderEvent,
+	SourceTools,
+	TurnEnded,
+)
 
 # One scripted turn: it calls the source tools the way a model would.
 ScriptedTurn = Callable[[SourceTools], Awaitable[None]]
 
 
 class ScriptedSession:
-	"""Plays one scripted turn per prompt and records the prompts it was sent."""
+	"""Plays one scripted turn per prompt and records what it was sent."""
 
-	def __init__(self, turns: list[ScriptedTurn], source_tools: SourceTools, prompts: list[str]):
-		self._turns = turns
+	def __init__(self, provider: "ScriptedProvider", source_tools: SourceTools) -> None:
+		self._provider = provider
 		self._source_tools = source_tools
-		self._prompts = prompts
 		self._interrupted = asyncio.Event()
 
-	async def send(self, prompt: str) -> None:
-		self._prompts.append(prompt)
+	async def send(self, prompt: str, images: Sequence[PromptImage] = ()) -> None:
+		self._provider.prompts.append(prompt)
+		self._provider.images.append(list(images))
 		self._interrupted.clear()
 
 	async def receive(self) -> AsyncIterator[ProviderEvent]:
-		if not self._turns:
+		if not self._provider.turns:
 			yield TurnEnded(was_interrupted=False)
 			return
 
 		# Run the turn until it finishes or the session is interrupted.
-		turn_task = asyncio.ensure_future(self._turns.pop(0)(self._source_tools))
+		turn_task = asyncio.ensure_future(self._provider.turns.pop(0)(self._source_tools))
 		interrupt_task = asyncio.ensure_future(self._interrupted.wait())
 		await asyncio.wait({turn_task, interrupt_task}, return_when=asyncio.FIRST_COMPLETED)
 
@@ -43,16 +49,29 @@ class ScriptedSession:
 
 
 class ScriptedProvider:
-	"""Opens sessions that play the given turns in order."""
+	"""Opens sessions that play the given turns in order, and answers one-off prompts."""
 
 	def __init__(self, turns: list[ScriptedTurn]) -> None:
-		self._turns = turns
+		self.turns = turns
+
+		# Everything the sessions were sent, one entry per turn.
 		self.prompts: list[str] = []
+		self.images: list[list[PromptImage]] = []
 		self.system_prompts: list[str] = []
+		self.models: list[str] = []
+
+		# The answer to the next one-off prompt, and the one-off prompts received.
+		self.completion = "[]"
+		self.completion_prompts: list[str] = []
 
 	@asynccontextmanager
 	async def open_session(
 		self, *, system_prompt: str, model: str, source_tools: SourceTools
 	) -> AsyncIterator[ModelSession]:
 		self.system_prompts.append(system_prompt)
-		yield ScriptedSession(self._turns, source_tools, self.prompts)
+		self.models.append(model)
+		yield ScriptedSession(self, source_tools)
+
+	async def complete(self, *, system_prompt: str, prompt: str, model: str) -> str:
+		self.completion_prompts.append(prompt)
+		return self.completion

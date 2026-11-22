@@ -7,9 +7,9 @@ export type StartCommand = {
 	type: 'start';
 	piece_id: string;
 	parent_step_id: string | null;
+	// The uploaded node to continue from, which has no step to name.
+	parent_node_id: string | null;
 	prompt: string;
-	is_step_by_step: boolean;
-	model: string;
 };
 
 export type SteeringCommand =

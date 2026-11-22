@@ -1,6 +1,7 @@
 """Claude through the Claude Agent SDK, signed in with this machine's Claude plan login."""
 
-from collections.abc import AsyncIterator
+import base64
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -12,13 +13,16 @@ from claude_agent_sdk import (
 	ResultMessage,
 	StreamEvent,
 	create_sdk_mcp_server,
+	query,
 	tool,
 )
 
 from smooth_diagrams.generation.partial_json import read_partial_string_field
 from smooth_diagrams.generation.source_edits import SourceEdit
 from smooth_diagrams.providers.base import (
+	ModelCallError,
 	ModelSession,
+	PromptImage,
 	ProviderEvent,
 	ReasoningProgress,
 	SourceTools,
@@ -133,10 +137,36 @@ class ClaudeSession:
 		self._client = client
 		self._was_interrupted = False
 
-	async def send(self, prompt: str) -> None:
-		"""Start a turn with a prompt."""
+	async def send(self, prompt: str, images: Sequence[PromptImage] = ()) -> None:
+		"""Start a turn with a prompt and the images it refers to, in order."""
 		self._was_interrupted = False
-		await self._client.query(prompt)
+		if not images:
+			await self._client.query(prompt)
+			return
+
+		# Send the text and the images as one user message.
+		content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+		for image in images:
+			content.append(
+				{
+					"type": "image",
+					"source": {
+						"type": "base64",
+						"media_type": image.media_type,
+						"data": base64.b64encode(image.data).decode("ascii"),
+					},
+				}
+			)
+		message = {
+			"type": "user",
+			"message": {"role": "user", "content": content},
+			"parent_tool_use_id": None,
+		}
+
+		async def one_message() -> AsyncIterator[dict[str, Any]]:
+			yield message
+
+		await self._client.query(one_message())
 
 	async def receive(self) -> AsyncIterator[ProviderEvent]:
 		"""Yield the events of the current turn, ending with TurnEnded."""
@@ -221,3 +251,28 @@ class ClaudeProvider:
 		)
 		async with ClaudeSDKClient(options) as client:
 			yield ClaudeSession(client)
+
+	async def complete(self, *, system_prompt: str, prompt: str, model: str) -> str:
+		"""Return the answer to one prompt, with no tools and no memory."""
+		self._working_directory.mkdir(parents=True, exist_ok=True)
+
+		options = ClaudeAgentOptions(
+			system_prompt=system_prompt,
+			model=model,
+			cwd=self._working_directory,
+			tools=[],
+			strict_mcp_config=True,
+			setting_sources=[],
+			skills=[],
+			verbatim_prompts=True,
+			max_turns=1,
+		)
+
+		# Keep the text of the answer, which the final result message repeats in full.
+		answer = ""
+		async for message in query(prompt=prompt, options=options):
+			if isinstance(message, ResultMessage):
+				if message.is_error:
+					raise ModelCallError(describe_result_error(message))
+				answer = message.result or ""
+		return answer

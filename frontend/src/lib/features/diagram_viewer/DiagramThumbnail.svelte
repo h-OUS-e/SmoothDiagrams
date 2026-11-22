@@ -1,23 +1,25 @@
 <script lang="ts">
 	type Props = {
-		// Rendered markup of a step, or null when there is nothing to show yet.
+		// Rendered markup of a step, or null when there is none.
 		svg_markup: string | null;
+		// Address of an uploaded image, shown when there is no markup.
+		image_url?: string | null;
 		label: string;
 	};
 
-	let { svg_markup, label }: Props = $props();
+	let { svg_markup, image_url = null, label }: Props = $props();
 
 	// Load the markup as an image, which keeps any script inside it from running.
-	let image_url = $derived(
+	let source_url = $derived(
 		svg_markup === null
-			? null
+			? image_url
 			: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg_markup)}`
 	);
 </script>
 
 <span class="thumbnail">
-	{#if image_url}
-		<img class="image" src={image_url} alt={label} />
+	{#if source_url}
+		<img class="image" src={source_url} alt={label} draggable="false" />
 	{/if}
 </span>
 

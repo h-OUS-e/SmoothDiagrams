@@ -1,11 +1,23 @@
 """The contract every model vendor implements, so the generation session stays vendor-neutral."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from typing import Protocol
 
 from smooth_diagrams.generation.source_edits import SourceEdit
+
+
+class ModelCallError(Exception):
+	"""A model call failed; the message is shown to the director."""
+
+
+@dataclass(frozen=True)
+class PromptImage:
+	"""An image shown to the model alongside a prompt."""
+
+	media_type: str
+	data: bytes
 
 
 @dataclass(frozen=True)
@@ -49,8 +61,8 @@ ProviderEvent = ReasoningProgress | TurnEnded
 class ModelSession(Protocol):
 	"""One conversation with a model that keeps its context between prompts."""
 
-	async def send(self, prompt: str) -> None:
-		"""Start a turn with a prompt."""
+	async def send(self, prompt: str, images: Sequence[PromptImage] = ()) -> None:
+		"""Start a turn with a prompt and the images it refers to, in order."""
 		...
 
 	def receive(self) -> AsyncIterator[ProviderEvent]:
@@ -69,4 +81,8 @@ class ModelProvider(Protocol):
 		self, *, system_prompt: str, model: str, source_tools: SourceTools
 	) -> AbstractAsyncContextManager[ModelSession]:
 		"""Open a conversation that lasts for one generation."""
+		...
+
+	async def complete(self, *, system_prompt: str, prompt: str, model: str) -> str:
+		"""Return the answer to one prompt, with no tools and no memory."""
 		...

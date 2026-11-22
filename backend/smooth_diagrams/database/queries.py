@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from smooth_diagrams.database.models import Node, NodeStatus, Piece, Project, Step
+from smooth_diagrams.database.models import Export, Node, NodeStatus, Piece, Project, Step
 from smooth_diagrams.schemas import NodeSummary, ProjectSummary
 
 # ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ async def create_piece(session: AsyncSession, project: Project, name: str) -> Pi
 
 
 async def list_node_summaries(session: AsyncSession, piece_id: uuid.UUID) -> list[NodeSummary]:
-	"""Return a piece's nodes, oldest first, each with its step count and newest render."""
+	"""Return a piece's nodes, oldest first, each with its counts and newest render."""
 	is_accepted = (Step.node_id == Node.id) & Step.is_rejected.is_(False)
 	step_count = select(func.count()).where(is_accepted).correlate(Node).scalar_subquery()
 	render_svg = (
@@ -89,17 +89,22 @@ async def list_node_summaries(session: AsyncSession, piece_id: uuid.UUID) -> lis
 		.correlate(Node)
 		.scalar_subquery()
 	)
+	export_count = (
+		select(func.count()).where(Export.node_id == Node.id).correlate(Node).scalar_subquery()
+	)
 
 	rows = await session.execute(
-		select(Node, step_count, render_svg)
+		select(Node, step_count, render_svg, export_count)
 		.where(Node.piece_id == piece_id)
 		.order_by(Node.created_at)
 	)
-	return [build_node_summary(node, count, render) for node, count, render in rows]
+	return [build_node_summary(*row) for row in rows]
 
 
-def build_node_summary(node: Node, step_count: int, render_svg: str | None) -> NodeSummary:
-	"""Return the summary of a node from its row and its two computed values."""
+def build_node_summary(
+	node: Node, step_count: int, render_svg: str | None, export_count: int
+) -> NodeSummary:
+	"""Return the summary of a node from its row and its computed values."""
 	return NodeSummary(
 		id=node.id,
 		piece_id=node.piece_id,
@@ -111,18 +116,23 @@ def build_node_summary(node: Node, step_count: int, render_svg: str | None) -> N
 		model=node.model,
 		is_step_by_step=node.is_step_by_step,
 		failure_message=node.failure_message,
+		image_asset_id=node.image_asset_id,
+		interface_version_id=node.interface_version_id,
 		created_at=node.created_at,
 		step_count=step_count,
 		render_svg=render_svg,
+		export_count=export_count,
 	)
 
 
 async def get_node(session: AsyncSession, node_id: uuid.UUID) -> Node | None:
-	"""Return one node with its steps and the step it starts from."""
+	"""Return one node with its steps, the step it starts from, and its exports."""
 	result = await session.execute(
 		select(Node)
 		.where(Node.id == node_id)
-		.options(selectinload(Node.steps), selectinload(Node.parent_step))
+		.options(
+			selectinload(Node.steps), selectinload(Node.parent_step), selectinload(Node.exports)
+		)
 	)
 	return result.scalar_one_or_none()
 

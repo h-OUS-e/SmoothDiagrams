@@ -6,9 +6,9 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from smooth_diagrams.database import queries
+from smooth_diagrams.database import interface_queries, queries
 from smooth_diagrams.database.engine import SessionFactory
-from smooth_diagrams.database.models import Node, NodeStatus, Piece, Step
+from smooth_diagrams.database.models import Node, NodeKind, NodeStatus, Piece, Project, Step
 from smooth_diagrams.generation.messages import (
 	GenerationEndedEvent,
 	GenerationEvent,
@@ -30,17 +30,20 @@ from smooth_diagrams.generation.prompt_builder import (
 	build_resume_prompt,
 	build_system_prompt,
 )
+from smooth_diagrams.generation.prompt_context import PromptContext, load_prompt_context
 from smooth_diagrams.generation.source_edits import SourceEdit, SourceEditError, apply_source_edits
-from smooth_diagrams.model_catalog import is_known_model
+from smooth_diagrams.interface_settings import InterfaceSettings, build_default_settings
 from smooth_diagrams.providers.base import (
 	ModelProvider,
 	ModelSession,
+	PromptImage,
 	ReasoningProgress,
 	ToolReply,
 	TurnEnded,
 )
 from smooth_diagrams.schemas import NodeDetail, StepDetail
 from smooth_diagrams.settings import Settings
+from smooth_diagrams.storage.file_store import FileStore
 
 logger = logging.getLogger(__name__)
 
@@ -90,19 +93,24 @@ class GenerationSession:
 		start: StartCommand,
 		provider: ModelProvider,
 		session_factory: SessionFactory,
+		file_store: FileStore,
 		settings: Settings,
 		emit: EmitEvent,
 	) -> None:
 		self._start = start
 		self._provider = provider
 		self._session_factory = session_factory
+		self._file_store = file_store
 		self._settings = settings
 		self._emit_event = emit
-		self._model = start.model or settings.default_model
+
+		# The settings of the project's interface, read when the node is created.
+		self._interface = build_default_settings(settings.default_model)
 
 		self._node_id: uuid.UUID | None = None
 		self._base_source = ""
 		self._current_source = ""
+		self._context = PromptContext()
 		self._accepted_steps: list[Step] = []
 		self._next_step_index = 0
 
@@ -134,17 +142,20 @@ class GenerationSession:
 
 		try:
 			async with self._provider.open_session(
-				system_prompt=build_system_prompt(self._start.is_step_by_step),
-				model=self._model,
+				system_prompt=build_system_prompt(self._interface),
+				model=self._interface.model,
 				source_tools=self,
 			) as model_session:
 				self._model_session = model_session
 
-				# Run turns until no prompt is left to send.
-				prompt: str | None = build_first_prompt(self._start.prompt, self._base_source)
+				# Run turns until no prompt is left to send; only the first one carries images.
+				prompt: str | None
+				prompt, images = build_first_prompt(
+					self._start.prompt, self._base_source, self._context
+				)
 				while prompt is not None:
-					turn_ended = await self._run_turn(model_session, prompt)
-					prompt = await self._choose_next_prompt(turn_ended)
+					turn_ended = await self._run_turn(model_session, prompt, images)
+					prompt, images = await self._choose_next_prompt(turn_ended), []
 		except Exception as error:
 			logger.exception("Generation failed")
 			self._failure_message = self._failure_message or f"The model session failed: {error}"
@@ -153,12 +164,14 @@ class GenerationSession:
 
 		await self._finish()
 
-	async def _run_turn(self, model_session: ModelSession, prompt: str) -> TurnEnded:
+	async def _run_turn(
+		self, model_session: ModelSession, prompt: str, images: list[PromptImage]
+	) -> TurnEnded:
 		"""Send one prompt and relay the model's progress until its turn ends."""
 		turn_ended = TurnEnded(was_interrupted=False)
 		self._is_turn_active = True
 		try:
-			await model_session.send(prompt)
+			await model_session.send(prompt, images)
 			async for event in model_session.receive():
 				if isinstance(event, ReasoningProgress):
 					await self._emit(ReasoningProgressEvent(text=event.text))
@@ -394,28 +407,54 @@ class GenerationSession:
 		"""Create the node being generated and load the source it continues from."""
 		async with self._session_factory() as session:
 			piece = await session.get(Piece, self._start.piece_id)
-			if piece is None:
+			project = await session.get(Project, piece.project_id) if piece else None
+			if piece is None or project is None:
 				raise GenerationStartError("That piece no longer exists.")
-			if not is_known_model(self._model):
-				raise GenerationStartError(f'The model "{self._model}" is not one this app offers.')
+
+			# Read how the project is set up, which this node will be recorded as made with.
+			interface_version = await interface_queries.get_current_version(
+				session, project, self._settings.default_model
+			)
+			self._interface = InterfaceSettings.model_validate(interface_version.settings)
 
 			# Start from the chosen step of the parent node, when continuing one.
 			parent_step: Step | None = None
+			parent_node: Node | None = None
 			if self._start.parent_step_id is not None:
 				parent_step = await queries.get_step(session, self._start.parent_step_id)
 				if parent_step is None or parent_step.is_rejected:
 					raise GenerationStartError("The step to continue from no longer exists.")
+				parent_node = await session.get(Node, parent_step.node_id)
+
+			# Start from the image of an uploaded node, and from the source of the step it edited.
+			elif self._start.parent_node_id is not None:
+				parent_node = await queries.get_node(session, self._start.parent_node_id)
+				if parent_node is None or parent_node.kind != NodeKind.UPLOADED:
+					raise GenerationStartError("The node to continue from no longer exists.")
+				parent_step = parent_node.parent_step
+
+			if parent_step is not None:
 				self._base_source = parent_step.source
 				self._current_source = parent_step.source
+			self._context = await load_prompt_context(
+				session,
+				self._file_store,
+				piece.project_id,
+				parent_node,
+				self._interface.disabled_taste_prior_ids,
+			)
 
+			# Point at the step only when the node continues the node that step belongs to.
+			continues_step = parent_step is not None and self._start.parent_step_id is not None
 			node = Node(
 				piece_id=piece.id,
-				parent_node_id=parent_step.node_id if parent_step else None,
-				parent_step_id=parent_step.id if parent_step else None,
+				parent_node_id=parent_node.id if parent_node else None,
+				parent_step_id=parent_step.id if continues_step else None,
 				status=NodeStatus.GENERATING,
 				prompt=self._start.prompt,
-				model=self._model,
-				is_step_by_step=self._start.is_step_by_step,
+				model=self._interface.model,
+				is_step_by_step=self._interface.is_step_by_step,
+				interface_version_id=interface_version.id,
 				parameter_values={},
 			)
 			session.add(node)

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from smooth_diagrams.main import create_app
 from smooth_diagrams.settings import Settings
+from tests.color_embedder import ColorEmbedder
 from tests.scripted_provider import ScriptedProvider
 
 
@@ -18,12 +19,22 @@ def scripted_provider() -> ScriptedProvider:
 
 
 @pytest.fixture
-def client(tmp_path: Path, scripted_provider: ScriptedProvider) -> Iterator[TestClient]:
+def color_embedder() -> ColorEmbedder:
+	"""Return the embedder the test app sorts its library with."""
+	return ColorEmbedder()
+
+
+@pytest.fixture
+def client(
+	tmp_path: Path, scripted_provider: ScriptedProvider, color_embedder: ColorEmbedder
+) -> Iterator[TestClient]:
 	"""Return a client for an app that uses a fresh database file."""
 	settings = Settings(
 		database_url=f"sqlite+aiosqlite:///{(tmp_path / 'test.db').as_posix()}",
+		assets_directory=tmp_path / "assets",
 		step_outcome_timeout=2.0,
 		failure_limit=3,
 	)
-	with TestClient(create_app(settings=settings, provider=scripted_provider)) as test_client:
+	app = create_app(settings=settings, provider=scripted_provider, embedder=color_embedder)
+	with TestClient(app) as test_client:
 		yield test_client

@@ -4,14 +4,16 @@ import uuid
 
 from fastapi import APIRouter, HTTPException, status
 
-from smooth_diagrams.database import queries
-from smooth_diagrams.database.models import Piece
+from smooth_diagrams.database import interface_queries, queries
+from smooth_diagrams.database.models import InterfaceVersion, Piece
+from smooth_diagrams.interface_settings import InterfaceSettings
 from smooth_diagrams.routes.dependencies import SessionDependency
 from smooth_diagrams.schemas import (
 	NameInput,
 	PieceDetail,
 	PieceSummary,
 	ProjectDetail,
+	ProjectInput,
 	ProjectSummary,
 )
 
@@ -25,9 +27,24 @@ async def list_projects(session: SessionDependency) -> list[ProjectSummary]:
 
 
 @router.post("/projects", status_code=status.HTTP_201_CREATED)
-async def create_project(name_input: NameInput, session: SessionDependency) -> ProjectDetail:
-	"""Create a project with a first piece."""
-	project = await queries.create_project(session, name_input.name.strip())
+async def create_project(project_input: ProjectInput, session: SessionDependency) -> ProjectDetail:
+	"""Create a project with a first piece, starting from a copy of an interface if one is named."""
+	source_version: InterfaceVersion | None = None
+	if project_input.interface_version_id is not None:
+		source_version = await session.get(InterfaceVersion, project_input.interface_version_id)
+		if source_version is None:
+			raise HTTPException(status.HTTP_404_NOT_FOUND, "Interface version not found")
+
+	project = await queries.create_project(session, project_input.name.strip())
+
+	# Carry the chosen interface forward as the first version of the new project.
+	if source_version is not None:
+		await interface_queries.add_version(
+			session,
+			project,
+			InterfaceSettings.model_validate(source_version.settings),
+			source_version=source_version,
+		)
 	return ProjectDetail.model_validate(await queries.get_project(session, project.id))
 
 

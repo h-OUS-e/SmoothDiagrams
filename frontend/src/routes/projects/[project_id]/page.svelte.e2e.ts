@@ -83,7 +83,6 @@ test('reports a step that does not compile so the model can repair it', async ({
 test('names each model with its version and warns about one billed outside the plan', async ({
 	page
 }) => {
-	const generation_started = mock_generation_socket(page);
 	await page.goto(`/projects/${project.id}`);
 
 	const model = page.getByLabel('Model');
@@ -91,13 +90,11 @@ test('names each model with its version and warns about one billed outside the p
 	await expect(model.locator('option')).toHaveText(['Claude Opus 5.5', 'Claude Fable 5.2']);
 	await expect(page.getByText('Can be billed to usage credits.')).toBeHidden();
 
-	// Choosing the model shows its note and sends its exact id with the next generation.
+	// Choosing the model shows its note and stores its exact id in the project's interface.
+	const save_request = page.waitForRequest((request) => request.method() === 'PUT');
 	await model.selectOption('claude-fable-5-2');
 	await expect(page.getByText('Can be billed to usage credits.')).toBeVisible();
-
-	await page.getByLabel('Start this piece').fill('Rings');
-	await page.getByRole('button', { name: 'Draw' }).click();
-	expect((await generation_started).start.model).toBe('claude-fable-5-2');
+	expect((await save_request).postDataJSON()).toMatchObject({ model: 'claude-fable-5-2' });
 });
 
 test('sends steering commands while a generation runs', async ({ page }) => {

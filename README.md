@@ -17,6 +17,8 @@ Start the frontend from `frontend/`, then open http://localhost:5173.
 yarn dev
 ```
 
+Sorting the Library by similarity downloads an 89 MB image model from Hugging Face the first time it is used. Nothing is downloaded before that.
+
 ## Checking it
 
 ```bash

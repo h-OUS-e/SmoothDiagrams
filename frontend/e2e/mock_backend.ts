@@ -2,6 +2,7 @@
 
 import type { Page, WebSocketRoute } from '@playwright/test';
 import type {
+	InterfaceState,
 	ModelCatalog,
 	NodeDetail,
 	PieceDetail,
@@ -37,6 +38,56 @@ export const model_catalog: ModelCatalog = {
 	]
 };
 
+// The interface a project starts with, trimmed to one prompt control of each common kind.
+export const interface_state: InterfaceState = {
+	current_version_id: '99999999-9999-4999-8999-999999999991',
+	version_number: 1,
+	settings: {
+		model: 'claude-opus-5-5',
+		is_step_by_step: true,
+		offers_taste_reasons: true,
+		prompt_templates: {
+			direction: '',
+			step_by_step: 'Build the diagram in steps.',
+			single_pass: 'Write the diagram in one pass.'
+		},
+		prompt_controls: [
+			{
+				id: 'ratio',
+				label: 'Ratio',
+				kind: 'select',
+				instruction: 'Use a ratio of {value}.',
+				value: '4:3',
+				min: null,
+				max: null,
+				step: null,
+				options: ['4:3', '1:1']
+			},
+			{
+				id: 'novelty',
+				label: 'Novelty',
+				kind: 'slider',
+				instruction: 'Novelty is {value} out of 100.',
+				value: 30,
+				min: 0,
+				max: 100,
+				step: 5,
+				options: null
+			}
+		],
+		disabled_taste_prior_ids: []
+	},
+	versions: [
+		{
+			id: '99999999-9999-4999-8999-999999999991',
+			version_number: 1,
+			created_at,
+			node_count: 0,
+			is_current: true
+		}
+	]
+};
+
 export const project_summary: ProjectSummary = {
 	id: project.id,
 	name: project.name,
@@ -58,10 +109,15 @@ export const generating_node: NodeDetail = {
 	model: 'claude-opus-5-5',
 	is_step_by_step: true,
 	failure_message: null,
+	image_asset_id: null,
+	interface_version_id: null,
+	taste_reason_candidates: null,
+	taste_reason: null,
 	created_at,
 	parameter_values: {},
 	steps: [],
-	parent_step: null
+	parent_step: null,
+	exports: []
 };
 
 // Return a saved step of the generating node.
@@ -79,6 +135,36 @@ export function build_step(step_index: number, source: string, render_svg: strin
 	};
 }
 
+// Markup a finished step of the sample diagram is stored with.
+export const sample_render_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"/>';
+
+// Return a node that finished with one step, changed where a test needs it different.
+export function build_finished_node(source: string, changes: Partial<NodeDetail> = {}): NodeDetail {
+	return {
+		...generating_node,
+		status: 'finished',
+		steps: [build_step(0, source, sample_render_svg)],
+		...changes
+	};
+}
+
+// Answer the piece and node requests with a piece whose only node is the given one.
+export async function mock_piece_with_node(page: Page, node: NodeDetail) {
+	const piece: PieceDetail = {
+		...empty_piece,
+		nodes: [
+			{
+				...node,
+				step_count: node.steps.length,
+				render_svg: node.steps.at(-1)?.render_svg ?? null,
+				export_count: node.exports.length
+			}
+		]
+	};
+	await page.route(`${backend_url}/pieces/${piece.id}`, (route) => route.fulfill({ json: piece }));
+	await page.route(`${backend_url}/nodes/${node.id}`, (route) => route.fulfill({ json: node }));
+}
+
 // Answer the requests a project page makes with one project that has one empty piece.
 export async function mock_project_routes(page: Page) {
 	await page.route(`${backend_url}/projects`, (route) =>
@@ -88,6 +174,22 @@ export async function mock_project_routes(page: Page) {
 		route.fulfill({ json: project })
 	);
 	await page.route(`${backend_url}/models`, (route) => route.fulfill({ json: model_catalog }));
+	await page.route(`${backend_url}/interface_versions`, (route) => route.fulfill({ json: [] }));
+
+	// Answer a saved interface with what was sent, the way the server does for an unused version.
+	await page.route(`${backend_url}/projects/${project.id}/interface`, (route) => {
+		const request = route.request();
+		const settings =
+			request.method() === 'PUT'
+				? (request.postDataJSON() as InterfaceState['settings'])
+				: interface_state.settings;
+		return route.fulfill({ json: { ...interface_state, settings } });
+	});
+	await page.route(`${backend_url}/library?*`, (route) => route.fulfill({ json: [] }));
+	await page.route(`${backend_url}/projects/${project.id}/priors`, (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.route(`${backend_url}/taste_priors`, (route) => route.fulfill({ json: [] }));
 	await page.route(`${backend_url}/pieces/${empty_piece.id}`, (route) =>
 		route.fulfill({ json: empty_piece })
 	);

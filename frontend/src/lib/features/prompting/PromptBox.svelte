@@ -13,7 +13,8 @@
 		is_paused: boolean;
 		// Whether the node being generated has a step that can be rejected.
 		can_reject: boolean;
-		on_start: (prompt: string) => void;
+		// Start a generation and resolve with whether it started, so the text is kept if not.
+		on_start: (prompt: string) => Promise<boolean>;
 		on_redirect: (prompt: string) => void;
 		on_reject: (reason: string | null) => void;
 		on_pause: () => void;
@@ -43,10 +44,15 @@
 
 		if (is_generating) {
 			on_redirect(trimmed_text);
-		} else {
-			on_start(trimmed_text);
+			text = '';
+			return;
 		}
-		text = '';
+
+		// Keep the text when the generation could not start, so nothing typed is lost.
+		const prompt = trimmed_text;
+		void on_start(prompt).then((has_started) => {
+			if (has_started && text.trim() === prompt) text = '';
+		});
 	}
 
 	// Reject the newest step, with the text as the reason when there is any.

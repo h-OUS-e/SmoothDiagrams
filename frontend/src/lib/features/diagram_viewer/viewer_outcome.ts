@@ -21,8 +21,13 @@ export type ViewerExports = {
 	capture: () => Promise<string | null>;
 };
 
-// Return the width divided by the height of rendered markup, read from its viewBox.
-export function read_aspect_ratio(svg_markup: string): number | null {
+export type DiagramSize = {
+	width: number;
+	height: number;
+};
+
+// Return the size rendered markup gives itself through its viewBox, in its own units.
+export function read_view_box_size(svg_markup: string): DiagramSize | null {
 	const view_box = /<svg\b[^>]*\bviewBox="([^"]+)"/.exec(svg_markup)?.[1];
 	if (!view_box) return null;
 
@@ -30,5 +35,11 @@ export function read_aspect_ratio(svg_markup: string): number | null {
 		.trim()
 		.split(/[\s,]+/)
 		.map(Number);
-	return width > 0 && height > 0 ? width / height : null;
+	return width > 0 && height > 0 ? { width, height } : null;
+}
+
+// Return the width divided by the height of rendered markup, read from its viewBox.
+export function read_aspect_ratio(svg_markup: string): number | null {
+	const size = read_view_box_size(svg_markup);
+	return size ? size.width / size.height : null;
 }

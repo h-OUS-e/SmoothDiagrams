@@ -19,8 +19,8 @@ export type DiagramExports = {
 
 type RawRecord = Record<string, unknown>;
 
-// Defaults by prop name; null marks a prop with no default or one that is not a literal.
-type PropDefaults = Map<string, ESTree.Node | null>;
+// Default expressions by prop name; null marks a prop with no default.
+export type PropDefaults = Map<string, ESTree.Node | null>;
 
 class NotLiteralError extends Error {}
 
@@ -104,7 +104,7 @@ function find_module_export(module: AST.Script | null, name: string): ESTree.Nod
 }
 
 // Return the default of every prop destructured from $props() in the instance script.
-function read_prop_defaults(instance: AST.Script | null): PropDefaults {
+export function read_prop_defaults(instance: AST.Script | null): PropDefaults {
 	const defaults: PropDefaults = new Map();
 
 	for (const statement of instance?.content.body ?? []) {

@@ -8,7 +8,8 @@ export type CompileOutcome =
 	| { ok: true; code: string; parameters: DiagramParameter[]; animation: DiagramAnimation | null }
 	| { ok: false; message: string };
 
-const diagram_filename = 'Diagram.svelte';
+// Name the compiler reports a diagram source under.
+export const diagram_filename = 'Diagram.svelte';
 
 // Return a message for a thrown compile error, with the offending lines when known.
 function describe_compile_error(error: unknown): string {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { get_asset_url } from '#lib/api/api_client.ts';
 	import type { NodeSummary } from '#lib/api/api_types.ts';
 	import DiagramThumbnail from '#lib/features/diagram_viewer/DiagramThumbnail.svelte';
 	import { layout_tree } from './tree_layout.ts';
@@ -33,8 +34,11 @@
 
 	// Return a short description of a node for assistive technology and the tooltip.
 	function describe_node(node: NodeSummary): string {
+		if (node.kind === 'uploaded') return 'An edit you uploaded';
+
 		const status = node.status === 'finished' ? '' : ` (${node.status})`;
-		return `${node.prompt}${status}`;
+		const exported = node.export_count > 0 ? ' (exported)' : '';
+		return `${node.prompt}${status}${exported}`;
 	}
 </script>
 
@@ -60,7 +64,10 @@
 					class={[
 						'node',
 						placement.node.status,
-						{ selected: placement.node.id === selected_node_id }
+						{
+							selected: placement.node.id === selected_node_id,
+							exported: placement.node.export_count > 0
+						}
 					]}
 					type="button"
 					style:left="{placement.column * cell_width}px"
@@ -73,7 +80,13 @@
 					disabled={is_locked && placement.node.id !== selected_node_id}
 					onclick={() => on_select(placement.node.id)}
 				>
-					<DiagramThumbnail svg_markup={placement.node.render_svg} label="" />
+					<DiagramThumbnail
+						svg_markup={placement.node.render_svg}
+						image_url={placement.node.image_asset_id
+							? get_asset_url(placement.node.image_asset_id)
+							: null}
+						label=""
+					/>
 				</button>
 			{/each}
 		</div>
@@ -135,6 +148,17 @@
 	.generating {
 		border-style: dashed;
 		border-color: var(--color-blueprint);
+	}
+
+	/* Mark a node the director exported with a red tab under its thumbnail. */
+	.exported::before {
+		content: '';
+		position: absolute;
+		left: -1px;
+		bottom: -5px;
+		width: 1.25rem;
+		height: 4px;
+		background: var(--color-marker);
 	}
 
 	/* Mark a node whose generation failed with a red corner. */

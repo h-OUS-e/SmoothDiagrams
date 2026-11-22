@@ -20,9 +20,9 @@ class StartCommand(BaseModel):
 	piece_id: uuid.UUID
 	# The step to continue from; leave empty to start a piece's root node.
 	parent_step_id: uuid.UUID | None = None
+	# The uploaded node to continue from, which has no step to name.
+	parent_node_id: uuid.UUID | None = None
 	prompt: str = Field(min_length=1)
-	is_step_by_step: bool = True
-	model: str | None = None
 
 
 class StepOutcomeCommand(BaseModel):

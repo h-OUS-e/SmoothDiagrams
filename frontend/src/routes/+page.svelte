@@ -3,12 +3,26 @@
 	import { resolve } from '$app/paths';
 	import { create_project } from '#lib/api/api_client.ts';
 	import Button from '#lib/components/ui/Button.svelte';
+	import SelectField from '#lib/components/ui/SelectField.svelte';
 	import DiagramThumbnail from '#lib/features/diagram_viewer/DiagramThumbnail.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
+	// Value of the choice that starts a project from the default interface.
+	const default_interface = '';
+
 	let project_name = $state('');
+	let source_version_id = $state(default_interface);
+
+	// Offer every interface version of every project as a starting point.
+	let interface_options = $derived([
+		{ value: default_interface, label: 'The default interface' },
+		...data.interface_sources.map((source) => ({
+			value: source.id,
+			label: `${source.project_name}, version ${source.version_number}`
+		}))
+	]);
 	let is_creating = $state(false);
 	let error_message: string | null = $state(null);
 
@@ -22,7 +36,7 @@
 		is_creating = true;
 		error_message = null;
 		try {
-			const project = await create_project(name);
+			const project = await create_project(name, source_version_id || null);
 			await goto(resolve('/projects/[project_id]', { project_id: project.id }));
 		} catch (error) {
 			error_message = error instanceof Error ? error.message : String(error);
@@ -49,7 +63,7 @@
 				void create_and_open_project();
 			}}
 		>
-			<label class="visually_hidden" for="project_name">Name of the new project</label>
+			<label class="sr-only" for="project_name">Name of the new project</label>
 			<input
 				id="project_name"
 				class="name"
@@ -57,6 +71,14 @@
 				placeholder="Name a new project"
 				bind:value={project_name}
 			/>
+			<div class="source">
+				<SelectField
+					label="Start from the interface of"
+					value={source_version_id}
+					options={interface_options}
+					on_change={(version_id: string) => (source_version_id = version_id)}
+				/>
+			</div>
 			<Button variant="primary" type="submit" disabled={project_name.trim() === '' || is_creating}>
 				Create project
 			</Button>
@@ -116,7 +138,13 @@
 
 	.create {
 		display: flex;
+		flex-wrap: wrap;
+		align-items: end;
 		gap: 0.375rem;
+	}
+
+	.source {
+		width: 15rem;
 	}
 
 	.name {
@@ -184,14 +212,5 @@
 		grid-column: 1 / -1;
 		color: var(--color-graphite);
 		font-size: 1rem;
-	}
-
-	.visually_hidden {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip-path: inset(50%);
-		white-space: nowrap;
 	}
 </style>

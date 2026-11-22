@@ -13,19 +13,37 @@ from smooth_diagrams.database import queries
 from smooth_diagrams.database.engine import create_engine, create_session_factory, run_migrations
 from smooth_diagrams.providers.base import ModelProvider
 from smooth_diagrams.providers.claude import ClaudeProvider
-from smooth_diagrams.routes import generations, models, nodes, projects
+from smooth_diagrams.routes import (
+	assets,
+	exports,
+	generations,
+	interfaces,
+	library,
+	models,
+	nodes,
+	priors,
+	projects,
+	taste_priors,
+)
 from smooth_diagrams.security import OriginGuard
 from smooth_diagrams.settings import Settings, backend_directory, get_settings
+from smooth_diagrams.similarity.embedder import ClipEmbedder, ImageEmbedder
+from smooth_diagrams.storage.file_store import LocalFileStore
 
 logger = logging.getLogger(__name__)
 
 
-def create_app(settings: Settings | None = None, provider: ModelProvider | None = None) -> FastAPI:
+def create_app(
+	settings: Settings | None = None,
+	provider: ModelProvider | None = None,
+	embedder: ImageEmbedder | None = None,
+) -> FastAPI:
 	"""Return the server app.
 
 	Args:
 		settings: Settings to use instead of the ones read from the environment.
 		provider: Model provider to use instead of Claude, such as a scripted one in tests.
+		embedder: Image embedder to use instead of CLIP, such as a simple one in tests.
 
 	Returns:
 		The FastAPI app, which migrates and opens the database when it starts.
@@ -40,8 +58,16 @@ def create_app(settings: Settings | None = None, provider: ModelProvider | None 
 
 		app.state.settings = app_settings
 		app.state.session_factory = create_session_factory(engine)
+		app.state.file_store = LocalFileStore(app_settings.assets_directory)
 		app.state.provider = provider or ClaudeProvider(
 			backend_directory / "data" / "claude_workspace"
+		)
+
+		# The embedding model itself is loaded the first time the library is sorted by similarity.
+		app.state.embedder = embedder or ClipEmbedder(
+			app_settings.similarity_model_repository,
+			app_settings.similarity_model_file,
+			app_settings.similarity_model_revision,
 		)
 
 		# Close the books on generations that a previous run left unfinished.
@@ -60,15 +86,21 @@ def create_app(settings: Settings | None = None, provider: ModelProvider | None 
 	app.add_middleware(
 		CORSMiddleware,
 		allow_origin_regex=app_settings.frontend_origin_pattern,
-		allow_methods=["GET", "POST", "PATCH", "DELETE"],
+		allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
 		allow_headers=["content-type"],
 	)
 	app.add_middleware(OriginGuard, allowed_origin_pattern=app_settings.frontend_origin_pattern)
 
 	app.include_router(projects.router)
 	app.include_router(nodes.router)
+	app.include_router(exports.router)
 	app.include_router(generations.router)
 	app.include_router(models.router)
+	app.include_router(assets.router)
+	app.include_router(library.router)
+	app.include_router(priors.router)
+	app.include_router(taste_priors.router)
+	app.include_router(interfaces.router)
 	return app
 
 
