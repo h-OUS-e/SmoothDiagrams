@@ -1,0 +1,5 @@
+# Local database, uploaded files, and the folder the Claude CLI runs in
+/data/
+
+# Settings that belong to one machine
+.env

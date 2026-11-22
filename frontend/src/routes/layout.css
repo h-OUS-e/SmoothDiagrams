@@ -1,0 +1,56 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/archivo/wdth.css';
+@import '@fontsource-variable/newsreader/wght-italic.css';
+@plugin '@tailwindcss/typography';
+
+/* ------------------------------------------------------------------ */
+/* Design tokens: static, so component styles can use every one of them. */
+/* ------------------------------------------------------------------ */
+
+@theme static {
+	/* One grotesque for the interface, one italic serif for notes written by the model. */
+	--font-sans: 'Archivo Variable', system-ui, sans-serif;
+	--font-note: 'Newsreader Variable', Georgia, serif;
+
+	/* A neutral gray desk, so the colors of a diagram are judged without a tint. */
+	--color-desk: #d5d7da;
+	--color-panel: #e4e6e8;
+	--color-paper: #fdfdfb;
+	--color-ink: #1b1d21;
+	--color-graphite: #5e636b;
+	--color-rule: #b9bdc2;
+
+	/* Red marks what the director decides; blue marks what the model says. */
+	--color-marker: #d3262e;
+	--color-blueprint: #2b64a8;
+	--color-blueprint-wash: #dce8f4;
+}
+
+/* ------------------------------------------------------------------ */
+/* Base                                                                */
+/* ------------------------------------------------------------------ */
+
+html,
+body {
+	height: 100%;
+}
+
+body {
+	background: var(--color-desk);
+	color: var(--color-ink);
+	font-family: var(--font-sans);
+	font-size: 0.875rem;
+	line-height: 1.4;
+}
+
+:focus-visible {
+	outline: 2px solid var(--color-ink);
+	outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	* {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+	}
+}
