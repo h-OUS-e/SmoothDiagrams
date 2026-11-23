@@ -2,6 +2,7 @@
 	import type { ExportDetail, ExportFormat } from '#lib/api/api_types.ts';
 	import Button from '#lib/components/ui/Button.svelte';
 	import NumberField from '#lib/components/ui/NumberField.svelte';
+	import PanelSection from '#lib/components/ui/PanelSection.svelte';
 	import SelectField from '#lib/components/ui/SelectField.svelte';
 	import TextField from '#lib/components/ui/TextField.svelte';
 	import type { DiagramSize } from '#lib/features/diagram_viewer/viewer_outcome.ts';
@@ -94,38 +95,45 @@
 </script>
 
 <div class="export_panel">
-	<section class="section">
-		<h3 class="heading">Export</h3>
-		{#if can_export}
-			<SelectField
-				label="Format"
-				value={format}
-				options={format_options}
-				on_change={(value: string) => (format = read_format(value))}
-			/>
-			<p class="note">{format_notes[format]}</p>
-			<TextField label="File name" value={name} on_change={(value: string) => (name = value)} />
+	{#if can_export}
+		<div class="new_export">
+			<PanelSection heading="File">
+				<!-- Keep each field next to the line that explains it. -->
+				<div class="described_field">
+					<SelectField
+						label="Format"
+						value={format}
+						options={format_options}
+						on_change={(value: string) => (format = read_format(value))}
+					/>
+					<p class="note">{format_notes[format]}</p>
+				</div>
 
-			{#if has_pixels}
-				<NumberField
-					label="Width in pixels"
-					value={pixel_width}
-					on_change={(value: number) => (pixel_width = value)}
-				/>
-			{/if}
+				<TextField label="File name" value={name} on_change={(value: string) => (name = value)} />
 
-			<!-- Say what will be saved, or why the size on screen cannot be. -->
-			{#if size_problem}
-				<p class="problem" role="alert">{size_problem}</p>
-			{:else}
-				<p class="note">
-					Saves {build_file_name(name, format)}{has_pixels
-						? `, ${pixel_width} by ${pixel_height} pixels`
-						: ''}.
-				</p>
-			{/if}
+				{#if has_pixels}
+					<div class="described_field">
+						<NumberField
+							label="Width in pixels"
+							value={pixel_width}
+							on_change={(value: number) => (pixel_width = value)}
+						/>
+						{#if size_problem}
+							<p class="problem" role="alert">{size_problem}</p>
+						{/if}
+					</div>
+				{/if}
+			</PanelSection>
 
-			<div>
+			<!-- Say what will be saved, then offer to save it. -->
+			<div class="action">
+				{#if !size_problem}
+					<p class="summary">
+						Saves {build_file_name(name, format)}{has_pixels
+							? `, ${pixel_width} by ${pixel_height} pixels`
+							: ''}.
+					</p>
+				{/if}
 				<Button
 					variant="primary"
 					disabled={is_exporting || size_problem !== null}
@@ -133,47 +141,53 @@
 				>
 					{is_exporting ? 'Exporting' : 'Export'}
 				</Button>
+				{#if error_message}
+					<p class="problem" role="alert">{error_message}</p>
+				{/if}
 			</div>
-			{#if error_message}
-				<p class="problem" role="alert">{error_message}</p>
-			{/if}
-		{:else}
-			<p class="note">Select a step that shows a diagram to export it.</p>
-		{/if}
-	</section>
+		</div>
+	{:else}
+		<p class="note">Select a step that shows a diagram to export it.</p>
+	{/if}
 
 	<!-- List the exports of the selected node, newest first. -->
 	{#if newest_exports.length > 0}
-		<section class="section">
-			<h3 class="heading">Exports of this node</h3>
-			<ul class="exports">
-				{#each newest_exports as node_export (node_export.id)}
-					<li class="export">
-						<span class="export_format">{describe_export(node_export)}</span>
-						<span class="export_date">{date_format.format(new Date(node_export.created_at))}</span>
-					</li>
-				{/each}
-			</ul>
-		</section>
+		<div class="past_exports">
+			<PanelSection heading="Exports of this node">
+				<ul class="exports">
+					{#each newest_exports as node_export (node_export.id)}
+						<li class="export">
+							<span class="export_format">{describe_export(node_export)}</span>
+							<span class="export_date">
+								{date_format.format(new Date(node_export.created_at))}
+							</span>
+						</li>
+					{/each}
+				</ul>
+			</PanelSection>
+		</div>
 	{/if}
 </div>
 
 <style>
 	.export_panel {
 		display: grid;
-		gap: 1.25rem;
+		gap: 1.5rem;
 	}
 
-	.section {
+	.new_export {
 		display: grid;
-		gap: 0.75rem;
+		gap: 1rem;
 	}
 
-	.heading {
-		margin: 0;
-		font-size: 0.875rem;
-		font-weight: 700;
-		font-stretch: 92%;
+	.described_field {
+		display: grid;
+		gap: 0.375rem;
+	}
+
+	.action {
+		display: grid;
+		gap: 0.5rem;
 	}
 
 	.note {
@@ -182,10 +196,22 @@
 		font-size: 0.8125rem;
 	}
 
+	.summary {
+		margin: 0;
+		font-size: 0.8125rem;
+		font-variant-numeric: tabular-nums;
+		overflow-wrap: anywhere;
+	}
+
 	.problem {
 		margin: 0;
 		color: var(--color-marker);
 		font-size: 0.8125rem;
+	}
+
+	.past_exports {
+		padding-top: 1.5rem;
+		border-top: 1px solid var(--color-rule);
 	}
 
 	.exports {
@@ -194,13 +220,15 @@
 		margin: 0;
 		padding: 0;
 		list-style: none;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.export {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: baseline;
 		justify-content: space-between;
-		gap: 0.5rem;
+		gap: 0 0.5rem;
 	}
 
 	.export_format {

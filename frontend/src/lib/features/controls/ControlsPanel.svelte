@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { ModelOption } from '#lib/api/api_types.ts';
+	import PanelSection from '#lib/components/ui/PanelSection.svelte';
 	import Tabs from '#lib/components/ui/Tabs.svelte';
 	import type {
 		DiagramParameter,
@@ -71,7 +72,8 @@
 	);
 </script>
 
-<aside class="controls_panel" aria-label="Controls">
+<!-- Dark, so the controls stand apart from the desk the diagram is judged on. -->
+<aside class="controls_panel" data-theme="dark" aria-label="Controls">
 	<PromptingControls {project_interface} {model_options} {is_generating} />
 
 	<Tabs
@@ -89,8 +91,7 @@
 		{:else}
 			<!-- Show the selected tab's parameters, grouped the way the diagram declared them. -->
 			{#each sections as section (section.heading)}
-				<section class="section">
-					<h3 class="heading">{section.heading}</h3>
+				<PanelSection heading={section.heading}>
 					{#each section.parameters as parameter (parameter.name)}
 						<ParameterControl
 							{parameter}
@@ -98,7 +99,7 @@
 							on_change={(value: ParameterValue) => on_parameter_change(parameter.name, value)}
 						/>
 					{/each}
-				</section>
+				</PanelSection>
 			{:else}
 				<p class="empty">
 					{#if parameters.length === 0}
@@ -125,23 +126,10 @@
 		background: var(--color-panel);
 	}
 
-	.heading {
-		margin: 0;
-		padding: 0;
-		font-size: 0.875rem;
-		font-weight: 700;
-		font-stretch: 92%;
-	}
-
 	.sections {
 		display: grid;
 		align-content: start;
-		gap: 1.25rem;
-	}
-
-	.section {
-		display: grid;
-		gap: 0.75rem;
+		gap: 1.5rem;
 	}
 
 	.empty {

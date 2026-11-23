@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { PromptControl, PromptControlKind } from '#lib/api/api_types.ts';
 	import Button from '#lib/components/ui/Button.svelte';
+	import PanelSection from '#lib/components/ui/PanelSection.svelte';
 	import SelectField from '#lib/components/ui/SelectField.svelte';
 	import TextAreaField from '#lib/components/ui/TextAreaField.svelte';
 	import TextField from '#lib/components/ui/TextField.svelte';
@@ -47,8 +48,7 @@
 	<legend class="sr-only">Interface</legend>
 
 	<!-- Prompt text the director can rewrite for this project. -->
-	<section class="section">
-		<h3 class="heading">Prompt templates</h3>
+	<PanelSection heading="Prompt templates">
 		<TextAreaField
 			label="Direction for every diagram of this project"
 			value={settings.prompt_templates.direction}
@@ -68,11 +68,10 @@
 			rows={4}
 			on_change={(text: string) => project_interface.change_template('single_pass', text)}
 		/>
-	</section>
+	</PanelSection>
 
 	<!-- The controls shown under Prompting, each with the instruction it gives the model. -->
-	<section class="section">
-		<h3 class="heading">Prompt controls</h3>
+	<PanelSection heading="Prompt controls">
 		{#each settings.prompt_controls as control (control.id)}
 			<PromptControlEditor
 				{control}
@@ -113,11 +112,10 @@
 				<Button type="submit" disabled={!can_add}>Add control</Button>
 			</form>
 		</details>
-	</section>
+	</PanelSection>
 
 	<!-- Every saved version; one that made nodes never changes and can be brought back. -->
-	<section class="section">
-		<h3 class="heading">Versions</h3>
+	<PanelSection heading="Versions">
 		<ol class="versions">
 			{#each project_interface.versions as version (version.id)}
 				<li class="version">
@@ -137,7 +135,7 @@
 				</li>
 			{/each}
 		</ol>
-	</section>
+	</PanelSection>
 </fieldset>
 
 <style>
@@ -148,18 +146,6 @@
 		margin: 0;
 		padding: 0;
 		border: 0;
-	}
-
-	.section {
-		display: grid;
-		gap: 0.75rem;
-	}
-
-	.heading {
-		margin: 0;
-		font-size: 0.875rem;
-		font-weight: 700;
-		font-stretch: 92%;
 	}
 
 	.add > summary {

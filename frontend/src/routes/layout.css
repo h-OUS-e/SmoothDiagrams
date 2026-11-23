@@ -20,10 +20,39 @@
 	--color-graphite: #5e636b;
 	--color-rule: #b9bdc2;
 
+	/* Ink of a filled button under the pointer. */
+	--color-ink-hover: #000;
+
 	/* Red marks what the director decides; blue marks what the model says. */
 	--color-marker: #d3262e;
 	--color-blueprint: #2b64a8;
 	--color-blueprint-wash: #dce8f4;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark theme: the same tokens, for any element marked data-theme.     */
+/* ------------------------------------------------------------------ */
+
+[data-theme='dark'] {
+	/* Neutral like the desk, so a dark panel puts no tint beside a diagram. */
+	--color-desk: #131417;
+	--color-panel: #1b1d21;
+	--color-paper: #26292e;
+	--color-ink: #e8eaed;
+	--color-ink-hover: #fafbfc;
+	--color-graphite: #a3a8b0;
+	--color-rule: #454a52;
+
+	/* Lighter marks, which keep small text readable on a dark panel. */
+	--color-marker: #f2676d;
+	--color-blueprint: #7fb2ea;
+	--color-blueprint-wash: #20324a;
+
+	/* Restate the text color, which is inherited as a value and not as a token. */
+	color: var(--color-ink);
+
+	/* Draw the browser's own controls and scrollbars dark as well. */
+	color-scheme: dark;
 }
 
 /* ------------------------------------------------------------------ */

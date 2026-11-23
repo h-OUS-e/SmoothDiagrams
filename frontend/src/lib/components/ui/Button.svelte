@@ -53,7 +53,8 @@
 	}
 
 	.primary:hover:not(:disabled) {
-		background: #000;
+		border-color: var(--color-ink-hover);
+		background: var(--color-ink-hover);
 	}
 
 	.marker {
