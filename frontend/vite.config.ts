@@ -5,6 +5,11 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+	// Listen on all IPv4 addresses so the port check collides with other dev servers using the same host
+	server: {
+		host: '0.0.0.0'
+	},
+
 	// Prepare the compiler when the dev server starts; discovering it during the first
 	// generation would reload the page and cut that generation off.
 	optimizeDeps: { include: ['svelte/compiler'] },
