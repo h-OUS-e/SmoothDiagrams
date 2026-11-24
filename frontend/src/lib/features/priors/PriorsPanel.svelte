@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { uploadable_image_types } from '#lib/api/api_client.ts';
 	import type { PriorChanges, PriorDetail, TastePriorDetail } from '#lib/api/api_types.ts';
 	import UploadIcon from '#lib/components/icons/UploadIcon.svelte';
 	import { drop_target } from '#lib/components/interactions/drag_and_drop.ts';
+	import { read_pasted_image } from '#lib/components/interactions/image_paste.ts';
 	import FileButton from '#lib/components/ui/FileButton.svelte';
 	import SelectField from '#lib/components/ui/SelectField.svelte';
 	import { library_item_drag_kind } from '#lib/features/library/library_drag.ts';
@@ -17,6 +19,7 @@
 		// Taste priors the open project's interface switches off.
 		disabled_taste_prior_ids: string[];
 		on_use_library_item: (item_id: string) => void;
+		on_add_image_prior: (file: File) => void;
 		on_add_text_prior: (name: string, text: string) => void;
 		on_change_prior: (prior_id: string, changes: PriorChanges) => void;
 		on_remove_prior: (prior_id: string) => void;
@@ -31,6 +34,7 @@
 		taste_priors,
 		disabled_taste_prior_ids,
 		on_use_library_item,
+		on_add_image_prior,
 		on_add_text_prior,
 		on_change_prior,
 		on_remove_prior,
@@ -46,7 +50,20 @@
 	] as const;
 
 	let taste_kind: TextTasteKind = $state('text');
+	let is_taste_form_open = $state(false);
+
+	// Add a pasted image as a taste prior while that form is open, and as a prior otherwise.
+	function handle_paste(event: ClipboardEvent) {
+		const file = read_pasted_image(event, uploadable_image_types);
+		if (!file) return;
+
+		event.preventDefault();
+		if (is_taste_form_open) on_add_image_taste_prior(file);
+		else on_add_image_prior(file);
+	}
 </script>
+
+<svelte:window onpaste={handle_paste} />
 
 <!-- Take items dropped from the library anywhere on the panel. -->
 <aside
@@ -65,8 +82,8 @@
 			/>
 		{:else}
 			<p class="hint">
-				Drag a reference here from the Library, or click it there. Each prior can carry a note on
-				what to take from it.
+				Drag a reference here from the Library, click it there, or paste an image. Each prior can
+				carry a note on what to take from it.
 			</p>
 		{/each}
 
@@ -97,7 +114,7 @@
 			{/each}
 		</ul>
 
-		<details class="add">
+		<details class="add" bind:open={is_taste_form_open}>
 			<summary>Add a taste prior</summary>
 			<TextEntryForm
 				name_label="Name"
@@ -113,13 +130,11 @@
 					on_change={(kind: string) => (taste_kind = kind === 'skill' ? 'skill' : 'text')}
 				/>
 			</TextEntryForm>
-			<FileButton
-				accept="image/png,image/jpeg,image/gif,image/webp"
-				on_pick={on_add_image_taste_prior}
-			>
+			<FileButton accept={uploadable_image_types.join(',')} on_pick={on_add_image_taste_prior}>
 				<UploadIcon size={14} />
 				Add an image instead
 			</FileButton>
+			<p class="hint">While this is open, a pasted image becomes a taste prior.</p>
 		</details>
 	</section>
 </aside>

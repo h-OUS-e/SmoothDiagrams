@@ -3,7 +3,7 @@
 	import { replaceState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { get_asset_url } from '#lib/api/api_client.ts';
+	import { get_asset_url, uploadable_image_types } from '#lib/api/api_client.ts';
 	import type { LibrarySort, PriorChanges } from '#lib/api/api_types.ts';
 	import UploadIcon from '#lib/components/icons/UploadIcon.svelte';
 	import Button from '#lib/components/ui/Button.svelte';
@@ -34,8 +34,6 @@
 	import StepValidator from '#lib/features/workspace/StepValidator.svelte';
 	import { Workspace } from '#lib/features/workspace/workspace.svelte.ts';
 	import type { PageProps } from './$types';
-
-	const image_types = 'image/png,image/jpeg,image/gif,image/webp';
 
 	let { data }: PageProps = $props();
 
@@ -199,6 +197,7 @@
 			priors={references.priors}
 			taste_priors={references.taste_priors}
 			on_use_library_item={(item_id: string) => references.use_as_prior(item_id)}
+			on_add_image_prior={(file: File) => references.add_image_prior(file)}
 			on_add_text_prior={(name: string, text: string) => references.add_text_prior(name, text)}
 			on_change_prior={(prior_id: string, changes: PriorChanges) =>
 				references.change_prior(prior_id, changes)}
@@ -268,7 +267,10 @@
 				<Button onclick={() => workspace.node && references.add_library_node(workspace.node.id)}>
 					Send to Library
 				</Button>
-				<FileButton accept={image_types} on_pick={(file: File) => workspace.upload_node(file)}>
+				<FileButton
+					accept={uploadable_image_types.join(',')}
+					on_pick={(file: File) => workspace.upload_node(file)}
+				>
 					<UploadIcon size={14} />
 					Upload an edit of this
 				</FileButton>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { get_asset_url } from '#lib/api/api_client.ts';
+	import { get_asset_url, uploadable_image_types } from '#lib/api/api_client.ts';
 	import type { LibraryItemDetail, LibraryOrder, LibrarySort } from '#lib/api/api_types.ts';
 	import RemoveIcon from '#lib/components/icons/RemoveIcon.svelte';
 	import SimilarIcon from '#lib/components/icons/SimilarIcon.svelte';
@@ -57,7 +57,7 @@
 			label="Sort the library"
 			on_select={(id: LibrarySort) => on_sort_change(id)}
 		/>
-		<FileButton accept="image/png,image/jpeg,image/gif,image/webp" on_pick={on_add_image}>
+		<FileButton accept={uploadable_image_types.join(',')} on_pick={on_add_image}>
 			<UploadIcon size={14} />
 			Add image
 		</FileButton>

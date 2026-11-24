@@ -117,6 +117,15 @@ export class References {
 		});
 	}
 
+	// Upload an image into the library and use it as a prior of the project.
+	async add_image_prior(file: File) {
+		await this.#run(async () => {
+			const item = await api.add_library_image(file);
+			this.priors.push(await api.add_library_prior(this.#project_id, item.id));
+			await this.#reload_library();
+		});
+	}
+
 	// Add a prior made of text, such as a brief.
 	async add_text_prior(name: string, text_content: string) {
 		await this.#run(async () => {

@@ -90,6 +90,9 @@ async function request<Result>(
 	return (await response.json()) as Result;
 }
 
+// Image types the server accepts as uploads.
+export const uploadable_image_types = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
 // Return a form that carries one uploaded file and any text fields that are set.
 function build_upload_form(file: File, fields: Record<string, string | null> = {}): FormData {
 	const form = new FormData();
