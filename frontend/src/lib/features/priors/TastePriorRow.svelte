@@ -63,7 +63,7 @@
 		width: 100%;
 		max-height: 5rem;
 		border: 1px solid var(--color-rule);
-		background: var(--color-paper);
+		background: var(--color-sheet);
 		object-fit: contain;
 	}
 

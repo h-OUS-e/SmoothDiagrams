@@ -20,6 +20,9 @@
 	--color-graphite: #5e636b;
 	--color-rule: #b9bdc2;
 
+	/* Page a diagram is drawn on, light in every theme so a diagram looks as it exports. */
+	--color-sheet: #fdfdfb;
+
 	/* Ink of a filled button under the pointer. */
 	--color-ink-hover: #000;
 

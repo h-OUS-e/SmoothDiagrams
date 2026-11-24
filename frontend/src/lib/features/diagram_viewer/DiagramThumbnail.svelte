@@ -28,7 +28,7 @@
 		display: block;
 		width: 100%;
 		height: 100%;
-		background: var(--color-paper);
+		background: var(--color-sheet);
 	}
 
 	.image {

@@ -145,7 +145,7 @@
 	.sheet {
 		width: min(100cqw, 100cqh * var(--aspect-ratio));
 		aspect-ratio: var(--aspect-ratio);
-		background: var(--color-paper);
+		background: var(--color-sheet);
 		box-shadow:
 			0 1px 0 var(--color-rule),
 			0 18px 40px -22px rgb(27 29 33 / 0.45);

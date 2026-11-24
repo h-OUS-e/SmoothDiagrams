@@ -187,7 +187,7 @@
 		display: block;
 		aspect-ratio: 4 / 3;
 		margin-bottom: 0.5rem;
-		background: var(--color-paper);
+		background: var(--color-sheet);
 		box-shadow:
 			0 1px 0 var(--color-rule),
 			0 14px 28px -20px rgb(27 29 33 / 0.5);
