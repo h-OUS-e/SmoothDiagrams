@@ -9,6 +9,7 @@
 	import { read_undo_shortcut } from '#lib/components/interactions/undo_shortcut.ts';
 	import Button from '#lib/components/ui/Button.svelte';
 	import FileButton from '#lib/components/ui/FileButton.svelte';
+	import ResizeHandle from '#lib/components/ui/ResizeHandle.svelte';
 	import ControlsPanel from '#lib/features/controls/ControlsPanel.svelte';
 	import type { ParameterValue } from '#lib/features/diagram_viewer/diagram_parameters.ts';
 	import DiagramViewer from '#lib/features/diagram_viewer/DiagramViewer.svelte';
@@ -34,6 +35,7 @@
 	import TasteReasonPicker from '#lib/features/taste_reasons/TasteReasonPicker.svelte';
 	import StepValidator from '#lib/features/workspace/StepValidator.svelte';
 	import { Workspace } from '#lib/features/workspace/workspace.svelte.ts';
+	import { PanelSize } from '#lib/state/panel_size.svelte.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -65,6 +67,9 @@
 	);
 
 	let viewer: ViewerExports | undefined = $state();
+
+	// Width of the priors panel, which the director can drag and which every project shares.
+	const priors_size = new PanelSize('priors', 272, 208, 416);
 
 	// Size of the selected step's diagram in its own units, which an exported image is scaled from.
 	let diagram_size = $derived(
@@ -175,7 +180,7 @@
 
 <svelte:window onkeydown={handle_keydown} />
 
-<div class="project_page">
+<div class="project_page" style:--priors-width="{priors_size.size}px">
 	<header class="top">
 		<NavigationBar
 			project_name={workspace.project.name}
@@ -224,6 +229,18 @@
 			on_remove_taste_prior={(taste_prior_id: string) =>
 				references.remove_taste_prior(taste_prior_id)}
 		/>
+
+		<!-- Drag the edge beside the stage to widen or narrow the panel. -->
+		<div class="priors_resize">
+			<ResizeHandle
+				bind:size={priors_size.size}
+				min_size={priors_size.min_size}
+				max_size={priors_size.max_size}
+				default_size={priors_size.default_size}
+				panel_side="left"
+				label="Resize the priors panel"
+			/>
+		</div>
 	</div>
 
 	<main class="stage">
@@ -370,7 +387,7 @@
 			'library library library' auto
 			'priors stage controls' minmax(0, 1fr)
 			'tree tree prompt' 13.5rem
-			/ 17rem minmax(0, 1fr) 20rem;
+			/ var(--priors-width) minmax(0, 1fr) 20rem;
 		gap: 1px;
 		height: 100dvh;
 	}
@@ -389,10 +406,17 @@
 		min-width: 0;
 	}
 
+	/* Hold the resize handle, which sits on the right edge of the panel. */
 	.priors {
 		grid-area: priors;
+		position: relative;
 		display: grid;
 		min-height: 0;
+	}
+
+	/* Place the handle against the panel without taking a grid cell of its own. */
+	.priors_resize {
+		display: contents;
 	}
 
 	.stage {
@@ -491,6 +515,11 @@
 		.viewer {
 			height: 60vw;
 			flex: none;
+		}
+
+		/* Drop the handle, since the stacked panel already spans the page. */
+		.priors_resize {
+			display: none;
 		}
 	}
 </style>

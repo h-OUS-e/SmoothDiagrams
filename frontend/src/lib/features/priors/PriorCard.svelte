@@ -62,8 +62,10 @@
 </article>
 
 <style>
+	/* Let the column shrink below a long name, which the name then cuts off. */
 	.prior_card {
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 0.5rem;
 		padding-bottom: 0.875rem;
 		border-bottom: 1px solid var(--color-rule);

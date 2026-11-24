@@ -150,6 +150,13 @@
 		background: var(--color-panel);
 	}
 
+	/* Keep every column to the panel width, so wide content cannot push it past the edge. */
+	.section,
+	.taste_priors,
+	.add {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
 	.section {
 		display: grid;
 		gap: 0.75rem;
