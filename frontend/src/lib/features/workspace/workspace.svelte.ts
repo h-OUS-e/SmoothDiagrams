@@ -21,6 +21,7 @@ import type {
 	ParameterValues
 } from '#lib/features/diagram_viewer/diagram_parameters.ts';
 import type { ViewerOutcome } from '#lib/features/diagram_viewer/viewer_outcome.ts';
+import { UndoStack } from '#lib/state/undo_stack.svelte.ts';
 
 export type ProposedStep = {
 	step_token: string;
@@ -64,6 +65,12 @@ function summarize_node(node: NodeDetail): NodeSummary {
 	};
 }
 
+// Return whether two sets of parameter values hold the same value for every parameter.
+function are_parameter_values_equal(first: ParameterValues, second: ParameterValues): boolean {
+	const names = new Set([...Object.keys(first), ...Object.keys(second)]);
+	return [...names].every((name) => first[name] === second[name]);
+}
+
 export class Workspace {
 	project: ProjectDetail = $state()!;
 	piece: PieceDetail | null = $state(null);
@@ -75,6 +82,8 @@ export class Workspace {
 	parameters: DiagramParameter[] = $state.raw([]);
 	animation: DiagramAnimation | null = $state.raw(null);
 	parameter_values: ParameterValues = $state({});
+	// Earlier and undone parameter values of the selected node, emptied when another node is selected.
+	parameter_history = new UndoStack<ParameterValues>();
 	time = $state(0);
 
 	// Source of the diagram the viewer shows, which stays the last good one when a source fails.
@@ -121,6 +130,8 @@ export class Workspace {
 
 	#socket: GenerationSocket | null = null;
 	#save_timer: ReturnType<typeof setTimeout> | null = null;
+	// Parameter values before the change in progress, or null when no change is in progress.
+	#values_before_change: ParameterValues | null = null;
 	#offers_taste_reasons = false;
 	#on_generation_ended: () => void;
 
@@ -195,16 +206,37 @@ export class Workspace {
 
 	// Change one exposed parameter and store the node's values shortly after.
 	set_parameter_value(name: string, value: ParameterValue) {
-		const node = this.node;
-		if (!node) return;
-		this.parameter_values[name] = value;
+		if (!this.node) return;
 
-		if (this.#save_timer) clearTimeout(this.#save_timer);
-		this.#save_timer = setTimeout(() => {
-			void this.#run(async () => {
-				await api.set_parameter_values(node.id, $state.snapshot(this.parameter_values));
-			});
-		}, save_delay);
+		// Keep the values from before the first change of a drag or typing, for undo.
+		this.#values_before_change ??= $state.snapshot(this.parameter_values);
+
+		this.parameter_values[name] = value;
+		this.#schedule_parameter_save();
+	}
+
+	// Record the change in progress as one step of undo, unless it left the values as they were.
+	end_parameter_change() {
+		const values_before_change = this.#values_before_change;
+		if (!values_before_change) return;
+		this.#values_before_change = null;
+
+		if (are_parameter_values_equal(values_before_change, this.parameter_values)) return;
+		this.parameter_history.record(values_before_change);
+	}
+
+	// Go back to the parameter values before the last change.
+	undo_parameter_change() {
+		this.end_parameter_change();
+		const previous_values = this.parameter_history.undo($state.snapshot(this.parameter_values));
+		if (previous_values) this.#replace_parameter_values(previous_values);
+	}
+
+	// Bring back the parameter values the last undo took away.
+	redo_parameter_change() {
+		this.end_parameter_change();
+		const next_values = this.parameter_history.redo($state.snapshot(this.parameter_values));
+		if (next_values) this.#replace_parameter_values(next_values);
 	}
 
 	// Remember an export of the selected node and mark the node as exported in the tree.
@@ -440,10 +472,33 @@ export class Workspace {
 		this.node = node;
 		this.selected_step_id = null;
 		this.parameter_values = { ...node?.parameter_values };
+		this.parameter_history.clear();
+		this.#values_before_change = null;
 		this.parameters = [];
 		this.animation = null;
 		this.time = 0;
 		this.rendered_source = null;
+	}
+
+	// Show other parameter values on the selected node and store them shortly after.
+	#replace_parameter_values(parameter_values: ParameterValues) {
+		if (!this.node) return;
+		// Copy the values, so later changes never reach the state kept in the undo stack.
+		this.parameter_values = { ...parameter_values };
+		this.#schedule_parameter_save();
+	}
+
+	// Store the selected node's parameter values once the controls rest for a moment.
+	#schedule_parameter_save() {
+		const node = this.node;
+		if (!node) return;
+
+		if (this.#save_timer) clearTimeout(this.#save_timer);
+		this.#save_timer = setTimeout(() => {
+			void this.#run(async () => {
+				await api.set_parameter_values(node.id, $state.snapshot(this.parameter_values));
+			});
+		}, save_delay);
 	}
 
 	// Bring the selected node's entry in the piece's tree in line with its detail.

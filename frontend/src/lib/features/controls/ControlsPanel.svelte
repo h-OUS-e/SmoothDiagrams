@@ -3,6 +3,7 @@
 	import type { ModelOption } from '#lib/api/api_types.ts';
 	import PanelSection from '#lib/components/ui/PanelSection.svelte';
 	import Tabs from '#lib/components/ui/Tabs.svelte';
+	import UndoButtons from '#lib/components/ui/UndoButtons.svelte';
 	import type {
 		DiagramParameter,
 		ParameterGroup,
@@ -18,6 +19,12 @@
 		parameters: DiagramParameter[];
 		parameter_values: ParameterValues;
 		on_parameter_change: (name: string, value: ParameterValue) => void;
+		// Called once the director settles on a value, which makes the change one step of undo.
+		on_parameter_change_ended: () => void;
+		can_undo_parameters: boolean;
+		can_redo_parameters: boolean;
+		on_undo_parameters: () => void;
+		on_redo_parameters: () => void;
 		project_interface: ProjectInterface;
 		model_options: ModelOption[];
 		// Whether a generation is running, during which its settings cannot change.
@@ -33,6 +40,11 @@
 		parameters,
 		parameter_values,
 		on_parameter_change,
+		on_parameter_change_ended,
+		can_undo_parameters,
+		can_redo_parameters,
+		on_undo_parameters,
+		on_redo_parameters,
 		project_interface,
 		model_options,
 		is_generating,
@@ -89,6 +101,19 @@
 		{:else if selected_tab === 'export'}
 			{@render export_tab()}
 		{:else}
+			<!-- Offer undo and redo of parameter changes, which both parameter tabs share. -->
+			{#if parameters.length > 0}
+				<div class="parameter_actions">
+					<UndoButtons
+						subject="parameter change"
+						can_undo={can_undo_parameters}
+						can_redo={can_redo_parameters}
+						on_undo={on_undo_parameters}
+						on_redo={on_redo_parameters}
+					/>
+				</div>
+			{/if}
+
 			<!-- Show the selected tab's parameters, grouped the way the diagram declared them. -->
 			{#each sections as section (section.heading)}
 				<PanelSection heading={section.heading}>
@@ -97,6 +122,7 @@
 							{parameter}
 							value={parameter_values[parameter.name]}
 							on_change={(value: ParameterValue) => on_parameter_change(parameter.name, value)}
+							on_change_ended={on_parameter_change_ended}
 						/>
 					{/each}
 				</PanelSection>
@@ -130,6 +156,11 @@
 		display: grid;
 		align-content: start;
 		gap: 1.5rem;
+	}
+
+	.parameter_actions {
+		display: flex;
+		justify-content: flex-end;
 	}
 
 	.empty {

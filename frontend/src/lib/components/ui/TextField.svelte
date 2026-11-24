@@ -5,9 +5,11 @@
 		label: string;
 		value: string;
 		on_change: (value: string) => void;
+		// Called once the director leaves the field or presses Enter after typing.
+		on_change_ended?: () => void;
 	};
 
-	let { label, value, on_change }: Props = $props();
+	let { label, value, on_change, on_change_ended }: Props = $props();
 </script>
 
 <Field {label}>
@@ -16,6 +18,7 @@
 		type="text"
 		{value}
 		oninput={(event) => on_change(event.currentTarget.value)}
+		onchange={() => on_change_ended?.()}
 	/>
 </Field>
 

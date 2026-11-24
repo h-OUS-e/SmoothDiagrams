@@ -6,6 +6,7 @@
 	import { get_asset_url, uploadable_image_types } from '#lib/api/api_client.ts';
 	import type { LibrarySort, PriorChanges } from '#lib/api/api_types.ts';
 	import UploadIcon from '#lib/components/icons/UploadIcon.svelte';
+	import { read_undo_shortcut } from '#lib/components/interactions/undo_shortcut.ts';
 	import Button from '#lib/components/ui/Button.svelte';
 	import FileButton from '#lib/components/ui/FileButton.svelte';
 	import ControlsPanel from '#lib/features/controls/ControlsPanel.svelte';
@@ -145,6 +146,16 @@
 		void replaceState(address, page.state);
 	}
 
+	// Undo or redo a parameter change from the keyboard.
+	function handle_keydown(event: KeyboardEvent) {
+		const command = read_undo_shortcut(event);
+		if (!command) return;
+
+		event.preventDefault();
+		if (command === 'undo') workspace.undo_parameter_change();
+		else workspace.redo_parameter_change();
+	}
+
 	// Close the socket and drop the waiting saves of state that is being replaced or left.
 	$effect(() => {
 		const current_workspace = workspace;
@@ -161,6 +172,8 @@
 <svelte:head>
 	<title>{workspace.project.name} - SmoothDiagrams</title>
 </svelte:head>
+
+<svelte:window onkeydown={handle_keydown} />
 
 <div class="project_page">
 	<header class="top">
@@ -293,6 +306,11 @@
 			parameter_values={workspace.parameter_values}
 			on_parameter_change={(name: string, value: ParameterValue) =>
 				workspace.set_parameter_value(name, value)}
+			on_parameter_change_ended={() => workspace.end_parameter_change()}
+			can_undo_parameters={workspace.parameter_history.can_undo}
+			can_redo_parameters={workspace.parameter_history.can_redo}
+			on_undo_parameters={() => workspace.undo_parameter_change()}
+			on_redo_parameters={() => workspace.redo_parameter_change()}
 			{project_interface}
 			model_options={data.model_catalog.models}
 			is_generating={workspace.is_generating}

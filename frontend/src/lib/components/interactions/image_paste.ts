@@ -1,13 +1,6 @@
 /* Read images pasted from the clipboard. */
 
-// Return whether the element takes typed text, where a pasted text belongs.
-function is_text_field(target: EventTarget | null): boolean {
-	return (
-		target instanceof HTMLInputElement ||
-		target instanceof HTMLTextAreaElement ||
-		(target instanceof HTMLElement && target.isContentEditable)
-	);
-}
+import { is_text_field } from './text_fields.ts';
 
 /**
  * Return the image a paste carries, unless the paste is text meant for a text field.

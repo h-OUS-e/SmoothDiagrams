@@ -6,9 +6,11 @@
 		// Color as #rrggbb.
 		value: string;
 		on_change: (value: string) => void;
+		// Called once the director settles on a color, such as when the picker closes.
+		on_change_ended?: () => void;
 	};
 
-	let { label, value, on_change }: Props = $props();
+	let { label, value, on_change, on_change_ended }: Props = $props();
 </script>
 
 <Field {label} readout={value} is_inline>
@@ -17,6 +19,7 @@
 		type="color"
 		{value}
 		oninput={(event) => on_change(event.currentTarget.value)}
+		onchange={() => on_change_ended?.()}
 	/>
 </Field>
 

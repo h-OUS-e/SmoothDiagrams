@@ -8,9 +8,11 @@
 		max: number;
 		step: number;
 		on_change: (value: number) => void;
+		// Called once the director releases the slider or stops stepping it with the keyboard.
+		on_change_ended?: () => void;
 	};
 
-	let { label, value, min, max, step, on_change }: Props = $props();
+	let { label, value, min, max, step, on_change, on_change_ended }: Props = $props();
 
 	// Show as many decimals as the step has, so the readout does not jitter.
 	let decimals = $derived(String(step).split('.')[1]?.length ?? 0);
@@ -25,6 +27,7 @@
 		{step}
 		{value}
 		oninput={(event) => on_change(event.currentTarget.valueAsNumber)}
+		onchange={() => on_change_ended?.()}
 	/>
 </Field>
 
